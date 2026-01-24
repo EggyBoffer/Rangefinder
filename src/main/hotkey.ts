@@ -1,14 +1,9 @@
 import { app, globalShortcut } from "electron";
-import { showPopupWindow } from "./windows/popupWindow";
+import { togglePopupWindow, hidePopupWindow } from "./windows/popupWindow";
 
 export function registerHotkeys(): void {
-  const ok = globalShortcut.register("Control+Shift+J", () => {
-    showPopupWindow();
-  });
-
-  if (!ok) {
-    console.warn("⚠️ Failed to register hotkey Control+Shift+J (already in use?)");
-  }
+  globalShortcut.register("Control+Shift+J", () => togglePopupWindow());
+  globalShortcut.register("Control+Shift+K", () => hidePopupWindow());
 
   app.on("will-quit", () => {
     globalShortcut.unregisterAll();

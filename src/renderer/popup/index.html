@@ -2,32 +2,182 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Jump Check</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
-      .wrap { border: 1px solid #ddd; border-radius: 14px; padding: 14px; background: white; }
-      h2 { margin: 0 0 8px; }
-      .muted { color: #666; font-size: 13px; }
-      input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #ccc; margin-top: 10px; }
-      .row { margin-top: 12px; }
-    </style>
+    <title>Rangefinder</title>
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
     <div class="wrap">
-      <h2>Jump Check</h2>
-      <div class="muted">Placeholder popup. Soon: destination + character + range result.</div>
+      <div class="panel">
+        <div class="top">
+          <div class="title">Rangefinder</div>
+          <div class="hint">Enter = run · Esc/Ctrl+Shift+K = close</div>
+        </div>
 
-      <div class="row">
-        <label>Destination system</label>
-        <input placeholder="e.g. Jita" />
-      </div>
+        <div class="inputs">
+          <div class="row">
+            <select id="character">
+              <option value="">Character</option>
+            </select>
 
-      <div class="row">
-        <label>Character</label>
-        <select>
-          <option>(no characters yet)</option>
-        </select>
+            <input id="system" placeholder="System" autocomplete="off" />
+          </div>
+          <div class="subhint" id="subhint"></div>
+        </div>
+
+        <div id="result" class="result">
+          <div class="resultTop">
+            <div id="summary" class="summary">Result</div>
+            <div id="inRange" class="badge good">IN RANGE</div>
+          </div>
+          <div class="rline"><span>From</span><span id="from">-</span></div>
+          <div class="rline"><span>Ship</span><span id="ship">-</span></div>
+          <div class="rline"><span>Distance</span><span id="dist">-</span></div>
+          <div class="rline"><span>Max range</span><span id="max">-</span></div>
+        </div>
+
+        <div></div>
       </div>
     </div>
+
+    <script>
+      const systemEl = document.getElementById("system");
+      const charEl = document.getElementById("character");
+      const resultEl = document.getElementById("result");
+      const summaryEl = document.getElementById("summary");
+      const inRangeEl = document.getElementById("inRange");
+      const distEl = document.getElementById("dist");
+      const maxEl = document.getElementById("max");
+      const fromEl = document.getElementById("from");
+      const shipEl = document.getElementById("ship");
+      const subhintEl = document.getElementById("subhint");
+
+      let devState = { enabled: false };
+
+      function hide() {
+        if (window.rangefinder && typeof window.rangefinder.hidePopup === "function") {
+          window.rangefinder.hidePopup();
+        }
+      }
+
+      function setSubhint(text) {
+        subhintEl.textContent = text || "";
+      }
+
+      function ensureCharSelected() {
+        if (!charEl.value) {
+          const first = Array.from(charEl.options).find(o => o.value);
+          if (first) charEl.value = first.value;
+        }
+      }
+
+      function upsertOption(value, label) {
+        let opt = Array.from(charEl.options).find(o => o.value === value);
+        if (!opt) {
+          opt = document.createElement("option");
+          opt.value = value;
+          charEl.appendChild(opt);
+        }
+        opt.textContent = label;
+      }
+
+      async function loadCharacters() {
+        charEl.innerHTML = "";
+        const base = document.createElement("option");
+        base.value = "";
+        base.textContent = "Character";
+        charEl.appendChild(base);
+
+        devState = { enabled: false };
+
+        if (window.rangefinder && typeof window.rangefinder.getDevState === "function") {
+          devState = await window.rangefinder.getDevState();
+        }
+
+        if (devState && devState.enabled) {
+          upsertOption("dev", devState.characterName);
+          charEl.value = "dev";
+        }
+
+        ensureCharSelected();
+      }
+
+      function resetUI() {
+        document.body.classList.remove("mode-result");
+        resultEl.classList.remove("show");
+        summaryEl.textContent = "Result";
+        fromEl.textContent = "-";
+        shipEl.textContent = "-";
+        distEl.textContent = "-";
+        maxEl.textContent = "-";
+        inRangeEl.textContent = "IN RANGE";
+        inRangeEl.classList.add("good");
+        inRangeEl.classList.remove("bad");
+        systemEl.value = "";
+        setSubhint("Type a destination system and press Enter.");
+        if (window.rangefinder && typeof window.rangefinder.setPopupMode === "function") {
+          window.rangefinder.setPopupMode("input");
+        }
+        systemEl.focus();
+      }
+
+      function run() {
+        const sys = (systemEl.value || "").trim();
+        ensureCharSelected();
+        const ch = (charEl.value || "").trim();
+        if (!sys || !ch) return;
+
+        document.body.classList.add("mode-result");
+        resultEl.classList.add("show");
+
+        let from = "-";
+        let ship = "-";
+        let d = 0;
+        let m = 0;
+        let summary = ch + " → " + sys;
+
+        if (ch === "dev" && devState && devState.enabled) {
+          from = devState.systemName;
+          ship = devState.shipName;
+          m = 5.0;
+          d = 3.42;
+          summary = devState.characterName + " → " + sys;
+        }
+
+        summaryEl.textContent = summary;
+        fromEl.textContent = from;
+        shipEl.textContent = ship;
+        distEl.textContent = d.toFixed(2) + " LY";
+        maxEl.textContent = m.toFixed(2) + " LY";
+
+        const ok = d <= m;
+        inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
+        inRangeEl.classList.toggle("good", ok);
+        inRangeEl.classList.toggle("bad", !ok);
+
+        if (window.rangefinder && typeof window.rangefinder.setPopupMode === "function") {
+          window.rangefinder.setPopupMode("result");
+        }
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          hide();
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          run();
+          return;
+        }
+      });
+
+      if (window.rangefinder && typeof window.rangefinder.onPopupReset === "function") {
+        window.rangefinder.onPopupReset(() => resetUI());
+      }
+
+      loadCharacters().then(() => resetUI());
+    </script>
   </body>
 </html>

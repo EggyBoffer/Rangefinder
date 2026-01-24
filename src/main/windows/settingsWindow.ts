@@ -9,13 +9,18 @@ export function setAppIsQuitting(v: boolean): void {
   isQuitting = v;
 }
 
+export function hideSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.hide();
+}
+
 function resolveSettingsHtmlPath(): string {
-  // Prefer dist/renderer if it exists (future-proof)
   const distPath = path.join(app.getAppPath(), "dist", "renderer", "settings", "index.html");
   if (fs.existsSync(distPath)) return distPath;
-
-  // Dev path (what you have right now)
   return path.join(app.getAppPath(), "src", "renderer", "settings", "index.html");
+}
+
+function resolveSettingsPreloadPath(): string {
+  return path.join(__dirname, "..", "preload", "settingsPreload.js");
 }
 
 export function createSettingsWindow(): BrowserWindow {
@@ -31,10 +36,11 @@ export function createSettingsWindow(): BrowserWindow {
     show: false,
     frame: false,
     titleBarStyle: "hidden",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#0b0f18",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: resolveSettingsPreloadPath(),
     },
   });
 
@@ -44,7 +50,6 @@ export function createSettingsWindow(): BrowserWindow {
     settingsWindow?.show();
   });
 
-  // Close button hides window (tray app behaviour)
   settingsWindow.on("close", (e) => {
     if (isQuitting) return;
     e.preventDefault();

@@ -6,22 +6,24 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "dev": "set RANGEFINDER_DEV=1&& npm run start"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.2.3",
     "electron": "^29.4.0",
-    "keytar": "^7.9.0",
-    "better-sqlite3": "^12.6.2"
+    "keytar": "^7.9.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
-    "typescript": "^5.9.3",
-    "ts-node": "^10.9.2",
     "electron-builder": "^26.4.0",
     "eslint": "^9.39.2",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

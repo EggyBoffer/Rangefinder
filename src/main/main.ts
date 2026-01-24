@@ -1,19 +1,51 @@
-import { app } from "electron";
+import { app, ipcMain } from "electron";
 import { createTray } from "./tray";
 import { registerHotkeys } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
-import { showSettingsWindow, setAppIsQuitting } from "./windows/settingsWindow";
+import { showSettingsWindow, setAppIsQuitting, hideSettingsWindow } from "./windows/settingsWindow";
+import { hidePopupWindow } from "./windows/popupWindow";
+import { isDevMode } from "./shared/env";
+import { setDevState, getDevState } from "./storage/devState";
 
+const APP_NAME = "Rangefinder";
 
-app.setName("Rangefinder");
+app.setName(APP_NAME);
+
+if (process.platform === "win32") {
+  app.setAppUserModelId("uk.co.rangefinder.app");
+}
+
+const gotLock = app.requestSingleInstanceLock();
+
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    showSettingsWindow();
+  });
+}
 
 function boot(): void {
   createTray();
   registerHotkeys();
 
-  const cfg = loadConfig();
+  ipcMain.on("settings:hide", () => hideSettingsWindow());
+  ipcMain.on("popup:hide", () => hidePopupWindow());
+  ipcMain.handle("dev:getState", () => getDevState());
 
-  // Only show settings on first ever run
+  if (isDevMode()) {
+    setDevState({
+      enabled: true,
+      characterName: "Dev - Redeemer",
+      systemName: "Rakapas",
+      shipName: "Redeemer",
+      jumpCalibrationLevel: 5,
+    });
+  } else {
+    setDevState({ enabled: false });
+  }
+
+  const cfg = loadConfig();
   if (!cfg.hasLaunchedBefore) {
     showSettingsWindow();
     cfg.hasLaunchedBefore = true;
@@ -29,5 +61,4 @@ app.on("before-quit", () => {
   setAppIsQuitting(true);
 });
 
-// Tray app: don't quit when windows are closed
 app.on("window-all-closed", () => {});

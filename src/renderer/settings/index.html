@@ -2,27 +2,167 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>RangeFinder - Settings</title>
+    <title>Rangefinder</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; }
-      .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; max-width: 760px; }
-      h1 { margin: 0 0 10px; }
-      code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
-      .muted { color: #666; }
-      ul { margin: 12px 0 0; padding-left: 18px; }
+      :root {
+        --bg: #0b0f18;
+        --panel: rgba(255,255,255,0.06);
+        --panel2: rgba(255,255,255,0.08);
+        --text: rgba(255,255,255,0.92);
+        --muted: rgba(255,255,255,0.65);
+        --border: rgba(255,255,255,0.10);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .window {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .titlebar {
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        background: rgba(255,255,255,0.04);
+        border-bottom: 1px solid var(--border);
+        -webkit-app-region: drag;
+        user-select: none;
+      }
+
+      .title-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+
+      .pill {
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        background: rgba(255,255,255,0.03);
+      }
+
+      .title-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+      }
+
+      .btn {
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      .btn:hover {
+        background: rgba(255,255,255,0.08);
+      }
+
+      .btn-close {
+        width: 36px;
+        padding: 0;
+        font-size: 16px;
+        line-height: 28px;
+      }
+
+      .content {
+        padding: 18px;
+        flex: 1;
+        overflow: auto;
+      }
+
+      .card {
+        max-width: 860px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      h1 { margin: 0 0 8px; font-size: 18px; }
+      p { margin: 8px 0; color: var(--muted); }
+
+      .row {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .box {
+        border: 1px solid var(--border);
+        background: var(--panel2);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+      code {
+        background: rgba(255,255,255,0.08);
+        padding: 2px 6px;
+        border-radius: 8px;
+        color: var(--text);
+      }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>RangeFinder</h1>
-      <p class="muted">Eve Online jump utility!</p>
-      <p>Hotkey: <code>Ctrl + Shift + J</code> </p>
+    <div class="window">
+      <div class="titlebar">
+        <div class="title-left">
+          <div>Rangefinder</div>
+          <div class="pill">Settings</div>
+        </div>
+        <div class="title-actions">
+          <button class="btn btn-close" id="btnClose" aria-label="Close">×</button>
+        </div>
+      </div>
 
-      <ul>
-        <li>Close this window = hide (app stays in tray)</li>
-        <li>Right-click tray icon → Open Settings</li>
-        <li>Left-click tray icon → Jump popup</li>
-      </ul>
+      <div class="content">
+        <div class="card">
+          <h1>Rangefinder</h1>
+          <p>Shell is running. Next: SSO + character list + universe DB.</p>
+          <p>Hotkey: <code>Ctrl + Shift + J</code></p>
+
+          <div class="row">
+            <div class="box">
+              <div class="label">Characters</div>
+              <div>Not configured yet</div>
+            </div>
+            <div class="box">
+              <div class="label">Polling</div>
+              <div>Not configured yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <script>
+      const btn = document.getElementById("btnClose");
+      btn.addEventListener("click", () => {
+        if (window.rangefinder && typeof window.rangefinder.hideSettings === "function") {
+          window.rangefinder.hideSettings();
+        }
+      });
+    </script>
   </body>
 </html>

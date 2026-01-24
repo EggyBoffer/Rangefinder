@@ -1,0 +1,27 @@
+{
+  "name": "eve-jump-tracker",
+  "version": "0.1.0",
+  "description": "Local EVE Online jump range planner using ESI",
+  "main": "dist/main/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^29.4.0",
+    "keytar": "^7.9.0",
+    "better-sqlite3": "^12.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "typescript": "^5.9.3",
+    "ts-node": "^10.9.2",
+    "electron-builder": "^26.4.0",
+    "eslint": "^9.39.2",
+    "prettier": "^3.8.1"
+  }
+}

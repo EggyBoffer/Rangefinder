@@ -5,6 +5,7 @@ declare global {
     rangefinder?: {
       hideSettings?: () => void;
       hidePopup?: () => void;
+
       getDevState?: () => Promise<
         | { enabled: false }
         | {
@@ -15,9 +16,17 @@ declare global {
             jumpCalibrationLevel: number;
           }
       >;
+
       onPopupReset?: (fn: () => void) => void;
-      setPopupMode?: (mode: "input" | "result") => void;
-      onPopupMode?: (fn: (mode: "input" | "result") => void) => void;
+      onPopupMode?: (fn: (mode: "auto" | "manual") => void) => void;
+
+      runJumpCheck?: (payload: {
+        mode: "auto" | "manual";
+        characterKey: string;
+        destinationSystem: string;
+        fromSystem?: string;
+        shipClass?: "BLACK_OPS" | "JUMP_FREIGHTER" | "CAPITAL" | "SUPERCAP" | "RORQUAL" | "LANCER";
+      }) => Promise<any>;
     };
   }
 }

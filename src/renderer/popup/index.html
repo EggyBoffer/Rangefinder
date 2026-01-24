@@ -14,15 +14,34 @@
           <div class="hint">Enter = run · Esc/Ctrl+Shift+K = close</div>
         </div>
 
-        <div class="inputs">
-          <div class="row">
-            <select id="character">
+        <div class="inputs" id="inputsAuto">
+          <div class="grid2">
+            <select id="characterAuto">
               <option value="">Character</option>
             </select>
-
-            <input id="system" placeholder="System" autocomplete="off" />
+            <input id="toAuto" placeholder="Destination system" autocomplete="off" />
           </div>
-          <div class="subhint" id="subhint"></div>
+          <div class="subhint" id="hintAuto"></div>
+        </div>
+
+        <div class="inputs" id="inputsManual">
+          <div class="grid2">
+            <select id="characterManual">
+              <option value="">Character</option>
+            </select>
+            <select id="shipClassManual">
+              <option value="">Ship</option>
+              <option value="BLACK_OPS">Black Ops</option>
+              <option value="JUMP_FREIGHTER">Jump Freighter</option>
+              <option value="CAPITAL">Capital</option>
+              <option value="SUPERCAP">Supercapital</option>
+              <option value="RORQUAL">Rorqual</option>
+              <option value="LANCER">Lancer</option>
+            </select>
+            <input id="fromManual" placeholder="From system" autocomplete="off" />
+            <input id="toManual" placeholder="Destination system" autocomplete="off" />
+          </div>
+          <div class="subhint" id="hintManual"></div>
         </div>
 
         <div id="result" class="result">
@@ -30,10 +49,11 @@
             <div id="summary" class="summary">Result</div>
             <div id="inRange" class="badge good">IN RANGE</div>
           </div>
-          <div class="rline"><span>From</span><span id="from">-</span></div>
-          <div class="rline"><span>Ship</span><span id="ship">-</span></div>
-          <div class="rline"><span>Distance</span><span id="dist">-</span></div>
-          <div class="rline"><span>Max range</span><span id="max">-</span></div>
+          <div class="rline"><span>From</span><span id="fromOut">-</span></div>
+          <div class="rline"><span>Ship</span><span id="shipOut">-</span></div>
+          <div class="rline"><span>Distance</span><span id="distOut">-</span></div>
+          <div class="rline"><span>Base range</span><span id="baseOut">-</span></div>
+          <div class="rline"><span>Max range</span><span id="maxOut">-</span></div>
         </div>
 
         <div></div>
@@ -41,17 +61,29 @@
     </div>
 
     <script>
-      const systemEl = document.getElementById("system");
-      const charEl = document.getElementById("character");
+      const inputsAuto = document.getElementById("inputsAuto");
+      const inputsManual = document.getElementById("inputsManual");
+
+      const characterAuto = document.getElementById("characterAuto");
+      const toAuto = document.getElementById("toAuto");
+      const hintAuto = document.getElementById("hintAuto");
+
+      const characterManual = document.getElementById("characterManual");
+      const shipClassManual = document.getElementById("shipClassManual");
+      const fromManual = document.getElementById("fromManual");
+      const toManual = document.getElementById("toManual");
+      const hintManual = document.getElementById("hintManual");
+
       const resultEl = document.getElementById("result");
       const summaryEl = document.getElementById("summary");
       const inRangeEl = document.getElementById("inRange");
-      const distEl = document.getElementById("dist");
-      const maxEl = document.getElementById("max");
-      const fromEl = document.getElementById("from");
-      const shipEl = document.getElementById("ship");
-      const subhintEl = document.getElementById("subhint");
+      const fromOutEl = document.getElementById("fromOut");
+      const shipOutEl = document.getElementById("shipOut");
+      const distOutEl = document.getElementById("distOut");
+      const baseOutEl = document.getElementById("baseOut");
+      const maxOutEl = document.getElementById("maxOut");
 
+      let mode = "auto";
       let devState = { enabled: false };
 
       function hide() {
@@ -60,104 +92,155 @@
         }
       }
 
-      function setSubhint(text) {
-        subhintEl.textContent = text || "";
+      function setHint(el, text) {
+        el.textContent = text || "";
       }
 
-      function ensureCharSelected() {
-        if (!charEl.value) {
-          const first = Array.from(charEl.options).find(o => o.value);
-          if (first) charEl.value = first.value;
+      function ensureSelected(selectEl) {
+        if (!selectEl.value) {
+          const first = Array.from(selectEl.options).find((o) => o.value);
+          if (first) selectEl.value = first.value;
         }
       }
 
-      function upsertOption(value, label) {
-        let opt = Array.from(charEl.options).find(o => o.value === value);
+      function upsertOption(selectEl, value, label) {
+        let opt = Array.from(selectEl.options).find((o) => o.value === value);
         if (!opt) {
           opt = document.createElement("option");
           opt.value = value;
-          charEl.appendChild(opt);
+          selectEl.appendChild(opt);
         }
         opt.textContent = label;
       }
 
       async function loadCharacters() {
-        charEl.innerHTML = "";
-        const base = document.createElement("option");
-        base.value = "";
-        base.textContent = "Character";
-        charEl.appendChild(base);
-
         devState = { enabled: false };
 
         if (window.rangefinder && typeof window.rangefinder.getDevState === "function") {
           devState = await window.rangefinder.getDevState();
         }
 
-        if (devState && devState.enabled) {
-          upsertOption("dev", devState.characterName);
-          charEl.value = "dev";
-        }
+        for (const sel of [characterAuto, characterManual]) {
+          sel.innerHTML = "";
+          const base = document.createElement("option");
+          base.value = "";
+          base.textContent = "Character";
+          sel.appendChild(base);
 
-        ensureCharSelected();
+          if (devState && devState.enabled) {
+            upsertOption(sel, "dev", devState.characterName);
+            sel.value = "dev";
+          }
+
+          ensureSelected(sel);
+        }
       }
 
       function resetUI() {
         document.body.classList.remove("mode-result");
         resultEl.classList.remove("show");
+
         summaryEl.textContent = "Result";
-        fromEl.textContent = "-";
-        shipEl.textContent = "-";
-        distEl.textContent = "-";
-        maxEl.textContent = "-";
+        fromOutEl.textContent = "-";
+        shipOutEl.textContent = "-";
+        distOutEl.textContent = "-";
+        baseOutEl.textContent = "-";
+        maxOutEl.textContent = "-";
+
         inRangeEl.textContent = "IN RANGE";
         inRangeEl.classList.add("good");
         inRangeEl.classList.remove("bad");
-        systemEl.value = "";
-        setSubhint("Type a destination system and press Enter.");
-        if (window.rangefinder && typeof window.rangefinder.setPopupMode === "function") {
-          window.rangefinder.setPopupMode("input");
+
+        if (mode === "auto") {
+          toAuto.value = "";
+          setHint(hintAuto, "Type destination system and press Enter.");
+          toAuto.focus();
+        } else {
+          fromManual.value = devState && devState.enabled ? devState.systemName : "";
+          toManual.value = "";
+          shipClassManual.value = devState && devState.enabled ? "BLACK_OPS" : "";
+          setHint(hintManual, "Fill From, Ship, Destination and press Enter.");
+          toManual.focus();
         }
-        systemEl.focus();
       }
 
-      function run() {
-        const sys = (systemEl.value || "").trim();
-        ensureCharSelected();
-        const ch = (charEl.value || "").trim();
-        if (!sys || !ch) return;
+      function setMode(newMode) {
+        mode = newMode === "manual" ? "manual" : "auto";
+        document.body.dataset.mode = mode;
+        resetUI();
+      }
+
+      async function run() {
+        if (!window.rangefinder || typeof window.rangefinder.runJumpCheck !== "function") return;
+
+        if (mode === "auto") {
+          const characterKey = String(characterAuto.value || "").trim();
+          const destinationSystem = String(toAuto.value || "").trim();
+          if (!characterKey || !destinationSystem) return;
+
+          setHint(hintAuto, "Checking...");
+          const res = await window.rangefinder.runJumpCheck({
+            mode: "auto",
+            characterKey,
+            destinationSystem,
+          });
+
+          if (!res || !res.ok) {
+            setHint(hintAuto, res && res.error ? res.error : "Error");
+            return;
+          }
+
+          document.body.classList.add("mode-result");
+          resultEl.classList.add("show");
+
+          summaryEl.textContent = res.summary;
+          fromOutEl.textContent = res.fromSystem;
+          shipOutEl.textContent = res.shipClass;
+          distOutEl.textContent = Number(res.distLy).toFixed(2) + " LY";
+          baseOutEl.textContent = Number(res.baseLy).toFixed(2) + " LY";
+          maxOutEl.textContent = Number(res.maxLy).toFixed(2) + " LY";
+
+          const ok = Boolean(res.inRange);
+          inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
+          inRangeEl.classList.toggle("good", ok);
+          inRangeEl.classList.toggle("bad", !ok);
+          return;
+        }
+
+        const characterKey = String(characterManual.value || "").trim();
+        const shipClass = String(shipClassManual.value || "").trim();
+        const fromSystem = String(fromManual.value || "").trim();
+        const destinationSystem = String(toManual.value || "").trim();
+        if (!characterKey || !shipClass || !fromSystem || !destinationSystem) return;
+
+        setHint(hintManual, "Checking...");
+        const res = await window.rangefinder.runJumpCheck({
+          mode: "manual",
+          characterKey,
+          shipClass,
+          fromSystem,
+          destinationSystem,
+        });
+
+        if (!res || !res.ok) {
+          setHint(hintManual, res && res.error ? res.error : "Error");
+          return;
+        }
 
         document.body.classList.add("mode-result");
         resultEl.classList.add("show");
 
-        let from = "-";
-        let ship = "-";
-        let d = 0;
-        let m = 0;
-        let summary = ch + " → " + sys;
+        summaryEl.textContent = res.summary;
+        fromOutEl.textContent = res.fromSystem;
+        shipOutEl.textContent = res.shipClass;
+        distOutEl.textContent = Number(res.distLy).toFixed(2) + " LY";
+        baseOutEl.textContent = Number(res.baseLy).toFixed(2) + " LY";
+        maxOutEl.textContent = Number(res.maxLy).toFixed(2) + " LY";
 
-        if (ch === "dev" && devState && devState.enabled) {
-          from = devState.systemName;
-          ship = devState.shipName;
-          m = 5.0;
-          d = 3.42;
-          summary = devState.characterName + " → " + sys;
-        }
-
-        summaryEl.textContent = summary;
-        fromEl.textContent = from;
-        shipEl.textContent = ship;
-        distEl.textContent = d.toFixed(2) + " LY";
-        maxEl.textContent = m.toFixed(2) + " LY";
-
-        const ok = d <= m;
+        const ok = Boolean(res.inRange);
         inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
         inRangeEl.classList.toggle("good", ok);
         inRangeEl.classList.toggle("bad", !ok);
-
-        if (window.rangefinder && typeof window.rangefinder.setPopupMode === "function") {
-          window.rangefinder.setPopupMode("result");
-        }
       }
 
       window.addEventListener("keydown", (e) => {
@@ -177,7 +260,11 @@
         window.rangefinder.onPopupReset(() => resetUI());
       }
 
-      loadCharacters().then(() => resetUI());
+      if (window.rangefinder && typeof window.rangefinder.onPopupMode === "function") {
+        window.rangefinder.onPopupMode((m) => setMode(m));
+      }
+
+      loadCharacters().then(() => setMode("auto"));
     </script>
   </body>
 </html>

@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "npm run build && electron .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "start": "npm run build && npm run rebuild && electron .",
     "dev": "set RANGEFINDER_DEV=1&& npm run start"
   },
   "keywords": [],
@@ -19,6 +20,8 @@
     "keytar": "^7.9.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.10",
     "electron-builder": "^26.4.0",
     "eslint": "^9.39.2",

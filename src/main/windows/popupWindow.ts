@@ -1,12 +1,9 @@
 import { BrowserWindow, screen, app } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { loadPopupPos, savePopupPos } from "../storage/popupPos";
 
 let popupWindow: BrowserWindow | null = null;
-
-const SIZE_INPUT = { w: 420, h: 140 };
-const SIZE_RESULT = { w: 420, h: 230 };
+let lastMode: "auto" | "manual" = "auto";
 
 function resolvePopupHtmlPath(): string {
   const distPath = path.join(app.getAppPath(), "dist", "renderer", "popup", "index.html");
@@ -18,30 +15,12 @@ function resolvePopupPreloadPath(): string {
   return path.join(__dirname, "..", "preload", "popupPreload.js");
 }
 
-function clampToWorkArea(x: number, y: number, w: number, h: number) {
-  const wa = screen.getPrimaryDisplay().workArea;
-  const cx = Math.min(Math.max(x, wa.x), wa.x + wa.width - w);
-  const cy = Math.min(Math.max(y, wa.y), wa.y + wa.height - h);
-  return { x: cx, y: cy };
-}
-
-function defaultPos() {
-  const wa = screen.getPrimaryDisplay().workArea;
-  return { x: wa.x + wa.width - SIZE_INPUT.w - 20, y: wa.y + wa.height - SIZE_INPUT.h - 40 };
-}
-
-function getStartPos() {
-  const saved = loadPopupPos();
-  if (!saved) return defaultPos();
-  return clampToWorkArea(saved.x, saved.y, SIZE_INPUT.w, SIZE_INPUT.h);
-}
-
 function sendReset(): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
   popupWindow.webContents.send("popup:reset");
 }
 
-function sendMode(mode: "input" | "result"): void {
+function sendMode(mode: "auto" | "manual"): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
   popupWindow.webContents.send("popup:mode", mode);
 }
@@ -49,8 +28,6 @@ function sendMode(mode: "input" | "result"): void {
 export function hidePopupWindow(): void {
   if (!popupWindow || popupWindow.isDestroyed()) return;
   sendReset();
-  sendMode("input");
-  popupWindow.setSize(SIZE_INPUT.w, SIZE_INPUT.h, false);
   popupWindow.hide();
 }
 
@@ -58,30 +35,33 @@ export function isPopupVisible(): boolean {
   return Boolean(popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible());
 }
 
-export function showPopupWindow(): void {
+export function showPopupWindow(mode: "auto" | "manual"): void {
   const win = createPopupWindow();
+  lastMode = mode;
+  sendMode(mode);
   sendReset();
-  sendMode("input");
-  win.setSize(SIZE_INPUT.w, SIZE_INPUT.h, false);
   win.show();
   win.focus();
 }
 
-export function togglePopupWindow(): void {
-  if (isPopupVisible()) hidePopupWindow();
-  else showPopupWindow();
+export function togglePopupWindow(mode: "auto" | "manual"): void {
+  if (isPopupVisible()) {
+    hidePopupWindow();
+  } else {
+    showPopupWindow(mode);
+  }
 }
 
 export function createPopupWindow(): BrowserWindow {
   if (popupWindow && !popupWindow.isDestroyed()) return popupWindow;
 
-  const pos = getStartPos();
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
 
   popupWindow = new BrowserWindow({
-    width: SIZE_INPUT.w,
-    height: SIZE_INPUT.h,
-    x: pos.x,
-    y: pos.y,
+    width: 460,
+    height: 240,
+    x: Math.max(0, sw - 480),
+    y: Math.max(0, sh - 230),
     resizable: false,
     maximizable: false,
     minimizable: false,
@@ -100,14 +80,8 @@ export function createPopupWindow(): BrowserWindow {
   popupWindow.loadFile(resolvePopupHtmlPath());
 
   popupWindow.webContents.on("did-finish-load", () => {
+    sendMode(lastMode);
     sendReset();
-    sendMode("input");
-  });
-
-  popupWindow.on("move", () => {
-    if (!popupWindow || popupWindow.isDestroyed()) return;
-    const b = popupWindow.getBounds();
-    savePopupPos({ x: b.x, y: b.y });
   });
 
   popupWindow.on("close", (e) => {
@@ -120,16 +94,4 @@ export function createPopupWindow(): BrowserWindow {
   });
 
   return popupWindow;
-}
-
-export function setPopupMode(mode: "input" | "result"): void {
-  if (!popupWindow || popupWindow.isDestroyed()) return;
-
-  const curBounds = popupWindow.getBounds();
-  const size = mode === "result" ? SIZE_RESULT : SIZE_INPUT;
-
-  const clamped = clampToWorkArea(curBounds.x, curBounds.y, size.w, size.h);
-  popupWindow.setBounds({ x: clamped.x, y: clamped.y, width: size.w, height: size.h }, false);
-
-  sendMode(mode);
 }

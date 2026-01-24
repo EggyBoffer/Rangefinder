@@ -1,11 +1,21 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, app } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 
 let settingsWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
 export function setAppIsQuitting(v: boolean): void {
   isQuitting = v;
+}
+
+function resolveSettingsHtmlPath(): string {
+  // Prefer dist/renderer if it exists (future-proof)
+  const distPath = path.join(app.getAppPath(), "dist", "renderer", "settings", "index.html");
+  if (fs.existsSync(distPath)) return distPath;
+
+  // Dev path (what you have right now)
+  return path.join(app.getAppPath(), "src", "renderer", "settings", "index.html");
 }
 
 export function createSettingsWindow(): BrowserWindow {
@@ -19,8 +29,8 @@ export function createSettingsWindow(): BrowserWindow {
     width: 900,
     height: 650,
     show: false,
-    frame: false,                 // ✅ removes title bar
-    titleBarStyle: "hidden",      // extra safety on Windows
+    frame: false,
+    titleBarStyle: "hidden",
     backgroundColor: "#ffffff",
     webPreferences: {
       nodeIntegration: false,
@@ -28,21 +38,13 @@ export function createSettingsWindow(): BrowserWindow {
     },
   });
 
-  const htmlPath = path.join(
-    __dirname,
-    "..",
-    "..",
-    "renderer",
-    "settings",
-    "index.html"
-  );
-  settingsWindow.loadFile(htmlPath);
+  settingsWindow.loadFile(resolveSettingsHtmlPath());
 
   settingsWindow.once("ready-to-show", () => {
     settingsWindow?.show();
   });
 
-  // Close button should NOT quit the app — it hides the settings window
+  // Close button hides window (tray app behaviour)
   settingsWindow.on("close", (e) => {
     if (isQuitting) return;
     e.preventDefault();

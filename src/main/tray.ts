@@ -12,7 +12,7 @@ export function createTray(): Tray {
   const img = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
-  tray.setToolTip("EVE Jump Tracker");
+  tray.setToolTip("Rangefinder");
 
   const menu = Menu.buildFromTemplate([
     { label: "Open Settings", click: () => showSettingsWindow() },
@@ -21,10 +21,13 @@ export function createTray(): Tray {
     { label: "Quit", click: () => app.quit() },
   ]);
 
-  tray.setContextMenu(menu);
+  const pop = () => {
+    tray?.popUpContextMenu(menu);
+  };
 
-  // Left click: show popup (fast workflow)
-  tray.on("click", () => showPopupWindow());
+  tray.on("click", () => pop());
+  tray.on("right-click", () => pop());
+  tray.on("double-click", () => showPopupWindow());
 
   return tray;
 }

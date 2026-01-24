@@ -4,7 +4,8 @@ import { registerHotkeys } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
 import { showSettingsWindow, setAppIsQuitting } from "./windows/settingsWindow";
 
-app.setName("Cyno Range Check");
+
+app.setName("Rangefinder");
 
 function boot(): void {
   createTray();

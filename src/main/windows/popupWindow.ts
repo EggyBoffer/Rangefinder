@@ -1,7 +1,15 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen, app } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 
 let popupWindow: BrowserWindow | null = null;
+
+function resolvePopupHtmlPath(): string {
+  const distPath = path.join(app.getAppPath(), "dist", "renderer", "popup", "index.html");
+  if (fs.existsSync(distPath)) return distPath;
+
+  return path.join(app.getAppPath(), "src", "renderer", "popup", "index.html");
+}
 
 export function createPopupWindow(): BrowserWindow {
   if (popupWindow && !popupWindow.isDestroyed()) {
@@ -30,12 +38,11 @@ export function createPopupWindow(): BrowserWindow {
     },
   });
 
-  const htmlPath = path.join(__dirname, "..", "..", "renderer", "popup", "index.html");
-  popupWindow.loadFile(htmlPath);
+  popupWindow.loadFile(resolvePopupHtmlPath());
 
   popupWindow.once("ready-to-show", () => popupWindow?.show());
 
-  // Hide when it loses focus (nice “quick panel” behaviour)
+  // Hide when it loses focus
   popupWindow.on("blur", () => popupWindow?.hide());
 
   popupWindow.on("closed", () => {

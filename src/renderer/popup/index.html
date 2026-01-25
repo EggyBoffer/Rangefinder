@@ -54,6 +54,8 @@
           <div class="rline"><span>Distance</span><span id="distOut">-</span></div>
           <div class="rline"><span>Base range</span><span id="baseOut">-</span></div>
           <div class="rline"><span>Max range</span><span id="maxOut">-</span></div>
+          <div class="rline"><span>Midpoints</span><span id="midOut">-</span></div>
+          <div class="rline"><span>Route</span><span id="routeOut">-</span></div>
         </div>
 
         <div></div>
@@ -82,6 +84,8 @@
       const distOutEl = document.getElementById("distOut");
       const baseOutEl = document.getElementById("baseOut");
       const maxOutEl = document.getElementById("maxOut");
+      const midOutEl = document.getElementById("midOut");
+      const routeOutEl = document.getElementById("routeOut");
 
       let mode = "auto";
       let devState = { enabled: false };
@@ -137,6 +141,10 @@
       }
 
       function resetUI() {
+        if (window.rangefinder && typeof window.rangefinder.setResultMode === "function") {
+          window.rangefinder.setResultMode(false);
+        }
+
         document.body.classList.remove("mode-result");
         resultEl.classList.remove("show");
 
@@ -146,6 +154,8 @@
         distOutEl.textContent = "-";
         baseOutEl.textContent = "-";
         maxOutEl.textContent = "-";
+        midOutEl.textContent = "-";
+        routeOutEl.textContent = "-";
 
         inRangeEl.textContent = "IN RANGE";
         inRangeEl.classList.add("good");
@@ -170,6 +180,39 @@
         resetUI();
       }
 
+      function renderResult(res) {
+        if (window.rangefinder && typeof window.rangefinder.setResultMode === "function") {
+          window.rangefinder.setResultMode(true);
+        }
+
+        document.body.classList.add("mode-result");
+        resultEl.classList.add("show");
+
+        summaryEl.textContent = res.summary;
+        fromOutEl.textContent = res.fromSystem;
+        shipOutEl.textContent = res.shipClass;
+        distOutEl.textContent = Number(res.distLy).toFixed(2) + " LY";
+        baseOutEl.textContent = Number(res.baseLy).toFixed(2) + " LY";
+        maxOutEl.textContent = Number(res.maxLy).toFixed(2) + " LY";
+
+        if (res.midpointsNeeded === null || typeof res.midpointsNeeded === "undefined") {
+          midOutEl.textContent = "-";
+        } else {
+          midOutEl.textContent = String(res.midpointsNeeded);
+        }
+
+        if (Array.isArray(res.route) && res.route.length) {
+          routeOutEl.textContent = res.route.join(" → ");
+        } else {
+          routeOutEl.textContent = "-";
+        }
+
+        const ok = Boolean(res.inRange);
+        inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
+        inRangeEl.classList.toggle("good", ok);
+        inRangeEl.classList.toggle("bad", !ok);
+      }
+
       async function run() {
         if (!window.rangefinder || typeof window.rangefinder.runJumpCheck !== "function") return;
 
@@ -190,20 +233,8 @@
             return;
           }
 
-          document.body.classList.add("mode-result");
-          resultEl.classList.add("show");
-
-          summaryEl.textContent = res.summary;
-          fromOutEl.textContent = res.fromSystem;
-          shipOutEl.textContent = res.shipClass;
-          distOutEl.textContent = Number(res.distLy).toFixed(2) + " LY";
-          baseOutEl.textContent = Number(res.baseLy).toFixed(2) + " LY";
-          maxOutEl.textContent = Number(res.maxLy).toFixed(2) + " LY";
-
-          const ok = Boolean(res.inRange);
-          inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
-          inRangeEl.classList.toggle("good", ok);
-          inRangeEl.classList.toggle("bad", !ok);
+          renderResult(res);
+          setHint(hintAuto, "");
           return;
         }
 
@@ -227,20 +258,8 @@
           return;
         }
 
-        document.body.classList.add("mode-result");
-        resultEl.classList.add("show");
-
-        summaryEl.textContent = res.summary;
-        fromOutEl.textContent = res.fromSystem;
-        shipOutEl.textContent = res.shipClass;
-        distOutEl.textContent = Number(res.distLy).toFixed(2) + " LY";
-        baseOutEl.textContent = Number(res.baseLy).toFixed(2) + " LY";
-        maxOutEl.textContent = Number(res.maxLy).toFixed(2) + " LY";
-
-        const ok = Boolean(res.inRange);
-        inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
-        inRangeEl.classList.toggle("good", ok);
-        inRangeEl.classList.toggle("bad", !ok);
+        renderResult(res);
+        setHint(hintManual, "");
       }
 
       window.addEventListener("keydown", (e) => {

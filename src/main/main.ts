@@ -3,16 +3,45 @@ import { createTray } from "./tray";
 import { registerHotkeys } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
 import { showSettingsWindow, setAppIsQuitting, hideSettingsWindow } from "./windows/settingsWindow";
-import { hidePopupWindow } from "./windows/popupWindow";
+import { hidePopupWindow, setPopupResultMode } from "./windows/popupWindow";
 import { isDevMode } from "./shared/env";
 import { setDevState, getDevState } from "./storage/devState";
 import { ensureUniverseReady } from "./universe/universeBootstrap";
-import { resolveSystemByName } from "./universe/universeDb";
+import { resolveSystemByName, getSystemById } from "./universe/universeDb";
 import { calcLightyears } from "./universe/universeMath";
 import { BASE_JUMP_RANGE_LY, calcJumpRangeLy, shipClassFromShipName, type JumpShipClass } from "./jump/jumpRange";
-
+import { findRouteESI } from "./planner/routePlanner";
+import { registerPopupDebugHotkeys } from "./windows/popupWindow";
+import { fetchSystemRegionName, fetchSystemSecurityStatus } from "./universe/esiPublic";
 
 const APP_NAME = "Rangefinder";
+
+const FORBIDDEN_REGIONS = new Set(["pochven", "a821-a", "jzh7-f", "uu4-fa"]);
+
+function isForbiddenRegion(regionName: string | null): boolean {
+  const n = String(regionName || "").trim().toLowerCase();
+  if (!n) return false;
+  return FORBIDDEN_REGIONS.has(n);
+}
+
+function secToOneDecimalRound(sec: number): number {
+  return Math.round(sec * 10) / 10;
+}
+
+function isCynoAllowed(sec: number | null): boolean {
+  if (typeof sec !== "number" || !Number.isFinite(sec)) return false;
+  return secToOneDecimalRound(sec) <= 0.4;
+}
+
+async function isForbiddenSystem(systemId: number): Promise<boolean> {
+  const rn = await fetchSystemRegionName(systemId);
+  return isForbiddenRegion(rn);
+}
+
+async function isCynoSystem(systemId: number): Promise<boolean> {
+  const sec = await fetchSystemSecurityStatus(systemId);
+  return isCynoAllowed(sec);
+}
 
 app.setName(APP_NAME);
 
@@ -30,24 +59,30 @@ if (!gotLock) {
   });
 }
 
-  async function boot(): Promise<void> {
-    await ensureUniverseReady();
+async function boot(): Promise<void> {
+  await ensureUniverseReady();
 
-    createTray();
-    registerHotkeys();
+  createTray();
+  registerHotkeys();
+  registerPopupDebugHotkeys();
 
-    ipcMain.on("settings:hide", () => hideSettingsWindow());
-    ipcMain.on("popup:hide", () => hidePopupWindow());
+  ipcMain.on("settings:hide", () => hideSettingsWindow());
+  ipcMain.on("popup:hide", () => hidePopupWindow());
 
-    ipcMain.handle("dev:getState", () => getDevState());
+  ipcMain.on("popup:setResultMode", (_e, on: boolean) => {
+    setPopupResultMode(!!on);
+  });
 
-    ipcMain.handle("universe:resolveSystem", async (_e, name: string) => {
-      const n = String(name || "").trim();
-      if (!n) return null;
-      return resolveSystemByName(n);
-    });
+  ipcMain.handle("debug:ping", async () => ({ ok: true, t: Date.now() }));
+  ipcMain.handle("dev:getState", () => getDevState());
 
-      ipcMain.handle(
+  ipcMain.handle("universe:resolveSystem", async (_e, name: string) => {
+    const n = String(name || "").trim();
+    if (!n) return null;
+    return resolveSystemByName(n);
+  });
+
+  ipcMain.handle(
     "jumpcheck:run",
     async (
       _e,
@@ -72,6 +107,20 @@ if (!gotLock) {
       const to = resolveSystemByName(destinationSystem);
       if (!to) return { ok: false, error: "Destination system not found" };
 
+      if (await isForbiddenSystem(to.id)) {
+        return {
+          ok: false,
+          error: "That destination is in a region that cannot be used (Pochven / A821-A / JZH7-F / UU4-FA).",
+        };
+      }
+
+      if (!(await isCynoSystem(to.id))) {
+        return {
+          ok: false,
+          error: "No cyno route found. (Valid jump points must be 0.4 or below.)",
+        };
+      }
+
       let fromName = "";
       let shipClass: JumpShipClass | null = null;
 
@@ -94,6 +143,37 @@ if (!gotLock) {
       const distLy = calcLightyears(from.x, from.y, from.z, to.x, to.y, to.z);
       const inRange = distLy <= maxLy;
 
+      let midpointsNeeded: number | null = null;
+      let route: string[] | null = null;
+      let hopLys: number[] | null = null;
+
+      if (!inRange) {
+        const res = await findRouteESI(from.id, to.id, maxLy, 80);
+
+        if (!res) {
+          return {
+            ok: false,
+            error: "No cyno route found. (Valid jump points must be 0.4 or below.)",
+          };
+        }
+
+        midpointsNeeded = Math.max(0, res.jumps - 1);
+
+        route = res.path
+          .map((id) => getSystemById(id))
+          .filter(Boolean)
+          .map((s) => (s as any).name);
+
+        const hop: number[] = [];
+        for (let i = 0; i < res.path.length - 1; i++) {
+          const a = getSystemById(res.path[i]);
+          const b = getSystemById(res.path[i + 1]);
+          if (!a || !b) continue;
+          hop.push(calcLightyears(a.x, a.y, a.z, b.x, b.y, b.z));
+        }
+        hopLys = hop;
+      }
+
       return {
         ok: true,
         inRange,
@@ -103,13 +183,13 @@ if (!gotLock) {
         distLy,
         baseLy,
         maxLy,
+        midpointsNeeded,
+        route,
+        hopLys,
         jdcLevel: dev.jumpCalibrationLevel,
       };
     }
   );
-
-
-
 
   if (isDevMode()) {
     setDevState({
@@ -132,7 +212,9 @@ if (!gotLock) {
 }
 
 app.whenReady().then(() => {
-  boot();
+  boot().catch(() => {
+    app.quit();
+  });
 });
 
 app.on("before-quit", () => {

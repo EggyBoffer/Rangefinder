@@ -1,87 +1,80 @@
-import { BrowserWindow, screen, app } from "electron";
-import * as path from "path";
-import * as fs from "fs";
+import { BrowserWindow, screen, globalShortcut } from "electron";
+import path from "path";
+import fs from "fs";
+import { isDevMode } from "../shared/env";
 
 let popupWindow: BrowserWindow | null = null;
-let lastMode: "auto" | "manual" = "auto";
 
-function resolvePopupHtmlPath(): string {
-  const distPath = path.join(app.getAppPath(), "dist", "renderer", "popup", "index.html");
-  if (fs.existsSync(distPath)) return distPath;
-  return path.join(app.getAppPath(), "src", "renderer", "popup", "index.html");
-}
+const POPUP_W = 520;
+const POPUP_H_AUTO = 170;
+const POPUP_H_MANUAL = 210;
+const POPUP_H_RESULT = 340;
 
-function resolvePopupPreloadPath(): string {
-  return path.join(__dirname, "..", "preload", "popupPreload.js");
-}
-
-function sendReset(): void {
-  if (!popupWindow || popupWindow.isDestroyed()) return;
-  popupWindow.webContents.send("popup:reset");
-}
-
-function sendMode(mode: "auto" | "manual"): void {
-  if (!popupWindow || popupWindow.isDestroyed()) return;
-  popupWindow.webContents.send("popup:mode", mode);
-}
-
-export function hidePopupWindow(): void {
-  if (!popupWindow || popupWindow.isDestroyed()) return;
-  sendReset();
-  popupWindow.hide();
-}
-
-export function isPopupVisible(): boolean {
-  return Boolean(popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible());
-}
-
-export function showPopupWindow(mode: "auto" | "manual"): void {
-  const win = createPopupWindow();
-  lastMode = mode;
-  sendMode(mode);
-  sendReset();
-  win.show();
-  win.focus();
-}
-
-export function togglePopupWindow(mode: "auto" | "manual"): void {
-  if (isPopupVisible()) {
-    hidePopupWindow();
-  } else {
-    showPopupWindow(mode);
+function firstExisting(paths: string[]): string {
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
   }
+  return paths[0];
 }
 
-export function createPopupWindow(): BrowserWindow {
+function getPopupHtmlPath(): string {
+  const cwd = process.cwd();
+  return firstExisting([
+    path.join(cwd, "dist", "renderer", "popup", "index.html"),
+    path.join(cwd, "src", "renderer", "popup", "index.html"),
+  ]);
+}
+
+function getPreloadPath(): string {
+  const base = path.resolve(__dirname, "..");
+  return firstExisting([
+    path.join(base, "preload", "popupPreload.js"),
+    path.join(base, "preload", "popupPreload.cjs"),
+    path.join(base, "preload", "popupPreload.mjs"),
+    path.join(process.cwd(), "dist", "main", "preload", "popupPreload.js"),
+  ]);
+}
+
+function centerOnCursor(win: BrowserWindow, w: number, h: number): void {
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const { x, y, width, height } = display.workArea;
+
+  win.setPosition(
+    Math.round(x + width / 2 - w / 2),
+    Math.round(y + height / 2 - h / 2),
+    false
+  );
+}
+
+function applySize(win: BrowserWindow, h: number): void {
+  win.setResizable(false);
+  win.setSize(POPUP_W, h, false);
+  centerOnCursor(win, POPUP_W, h);
+}
+
+function inputHeightForMode(mode: "auto" | "manual"): number {
+  return mode === "manual" ? POPUP_H_MANUAL : POPUP_H_AUTO;
+}
+
+function ensureWindow(): BrowserWindow {
   if (popupWindow && !popupWindow.isDestroyed()) return popupWindow;
 
-  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-
   popupWindow = new BrowserWindow({
-    width: 460,
-    height: 240,
-    x: Math.max(0, sw - 480),
-    y: Math.max(0, sh - 230),
-    resizable: false,
-    maximizable: false,
-    minimizable: false,
-    alwaysOnTop: true,
-    frame: false,
+    width: POPUP_W,
+    height: POPUP_H_AUTO,
     show: false,
-    transparent: false,
-    backgroundColor: "#0b0f18",
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
     webPreferences: {
-      nodeIntegration: false,
+      preload: getPreloadPath(),
       contextIsolation: true,
-      preload: resolvePopupPreloadPath(),
+      nodeIntegration: false,
     },
-  });
-
-  popupWindow.loadFile(resolvePopupHtmlPath());
-
-  popupWindow.webContents.on("did-finish-load", () => {
-    sendMode(lastMode);
-    sendReset();
   });
 
   popupWindow.on("close", (e) => {
@@ -90,8 +83,88 @@ export function createPopupWindow(): BrowserWindow {
   });
 
   popupWindow.on("blur", () => {
-    hidePopupWindow();
+    if (!isDevMode()) hidePopupWindow();
   });
 
+  popupWindow.on("closed", () => {
+    popupWindow = null;
+  });
+
+  popupWindow.loadFile(getPopupHtmlPath()).catch(() => {});
+
   return popupWindow;
+}
+
+function sendPopupState(win: BrowserWindow, mode: "auto" | "manual"): void {
+  const send = () => {
+    if (win.isDestroyed()) return;
+    win.webContents.send("popup:mode", mode);
+    win.webContents.send("popup:reset");
+  };
+
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", send);
+    return;
+  }
+
+  send();
+}
+
+export function showPopupWindow(mode: "auto" | "manual"): void {
+  const win = ensureWindow();
+
+  applySize(win, inputHeightForMode(mode));
+
+  win.show();
+  win.focus();
+
+  sendPopupState(win, mode);
+}
+
+export function togglePopupWindow(mode: "auto" | "manual" = "auto"): void {
+  const win = ensureWindow();
+  if (win.isVisible()) {
+    hidePopupWindow();
+    return;
+  }
+  showPopupWindow(mode);
+}
+
+export function hidePopupWindow(): void {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+
+  const win = popupWindow;
+
+  try {
+    win.webContents.send("popup:reset");
+  } catch {}
+
+  win.hide();
+  win.destroy();
+  popupWindow = null;
+}
+
+export function setPopupResultMode(on: boolean): void {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  applySize(popupWindow, on ? POPUP_H_RESULT : POPUP_H_AUTO);
+}
+
+export function registerPopupDebugHotkeys(): void {
+  if (!isDevMode()) return;
+
+  globalShortcut.register("Control+Shift+O", () => {
+    const win = ensureWindow();
+    applySize(win, POPUP_H_AUTO);
+    win.show();
+    win.focus();
+    win.webContents.openDevTools({ mode: "detach" });
+  });
+
+  globalShortcut.register("Control+Shift+Alt+P", () => {
+    const win = ensureWindow();
+    win.show();
+    win.focus();
+    win.setResizable(true);
+    win.setSize(980, 640, false);
+  });
 }

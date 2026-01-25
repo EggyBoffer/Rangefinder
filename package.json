@@ -1,32 +1,76 @@
 {
   "name": "eve-jump-tracker",
-  "version": "0.1.0",
-  "description": "Local EVE Online jump range planner using ESI",
+  "version": "1.0.0",
+  "description": "Rangefinder (EVE Online jump planner)",
   "main": "dist/main/main.js",
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "start": "npm run build && npm run rebuild && electron .",
-    "dev": "set RANGEFINDER_DEV=1&& npm run start"
+    "dev": "set RANGEFINDER_DEV=1&& npm run start",
+    "icons": "node scripts/gen-icons.js",
+    "pack": "npm run build && npm run rebuild && npm run icons && electron-builder --dir",
+    "dist": "npm run build && npm run rebuild && npm run icons && electron-builder",
+    "dist:win": "npm run build && npm run rebuild && npm run icons && electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.2.3",
-    "electron": "^29.4.0",
     "keytar": "^7.9.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.10",
+    "electron": "^29.4.0",
     "electron-builder": "^26.4.0",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^9.39.2",
+    "png-to-ico": "^2.1.8",
     "prettier": "^3.8.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "uk.co.rangefinder.app",
+    "productName": "Rangefinder",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Rangefinder-${version}-${arch}-${os}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

@@ -1,18 +1,25 @@
 import { app, ipcMain } from "electron";
 import { createTray } from "./tray";
-import { registerHotkeys } from "./hotkey";
+import { getHotkeys, registerHotkeys, resetHotkeysToDefault, setHotkeys, type HotkeyConfig } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
 import { showSettingsWindow, setAppIsQuitting, hideSettingsWindow } from "./windows/settingsWindow";
-import { hidePopupWindow, setPopupResultMode } from "./windows/popupWindow";
+import { hidePopupWindow, registerPopupDebugHotkeys, setPopupResultMode } from "./windows/popupWindow";
 import { isDevMode } from "./shared/env";
 import { setDevState, getDevState } from "./storage/devState";
 import { ensureUniverseReady } from "./universe/universeBootstrap";
 import { resolveSystemByName, getSystemById } from "./universe/universeDb";
 import { calcLightyears } from "./universe/universeMath";
-import { BASE_JUMP_RANGE_LY, calcJumpRangeLy, shipClassFromShipName, type JumpShipClass } from "./jump/jumpRange";
+import {
+  BASE_JUMP_RANGE_LY,
+  calcJumpRangeLy,
+  shipClassFromShipName,
+  shipClassFromEsiType,
+  type JumpShipClass,
+} from "./jump/jumpRange";
 import { findRouteESI } from "./planner/routePlanner";
-import { registerPopupDebugHotkeys } from "./windows/popupWindow";
 import { fetchSystemRegionName, fetchSystemSecurityStatus } from "./universe/esiPublic";
+import { loadEsiStore, removeCharacter as esiRemoveCharacter, setActiveCharacter as esiSetActiveCharacter } from "./esi/esiStore";
+import { startAddCharacter, fetchEsiCharacterLocationShipAndSkills, fetchEsiCharacterJdcLevel } from "./esi/esiAuth";
 
 const APP_NAME = "Rangefinder";
 
@@ -24,13 +31,13 @@ function isForbiddenRegion(regionName: string | null): boolean {
   return FORBIDDEN_REGIONS.has(n);
 }
 
-function secToOneDecimalRound(sec: number): number {
-  return Math.round(sec * 10) / 10;
+function secToOneDecimalTrunc(sec: number): number {
+  return Math.floor(sec * 10) / 10;
 }
 
 function isCynoAllowed(sec: number | null): boolean {
   if (typeof sec !== "number" || !Number.isFinite(sec)) return false;
-  return secToOneDecimalRound(sec) <= 0.4;
+  return secToOneDecimalTrunc(sec) <= 0.4;
 }
 
 async function isForbiddenSystem(systemId: number): Promise<boolean> {
@@ -73,8 +80,42 @@ async function boot(): Promise<void> {
     setPopupResultMode(!!on);
   });
 
+  ipcMain.handle("config:getHotkeys", async () => getHotkeys());
+
+  ipcMain.handle("config:setHotkeys", async (_e: any, hotkeys: HotkeyConfig) => {
+    return setHotkeys(hotkeys);
+  });
+
+  ipcMain.handle("config:resetHotkeys", async () => {
+    return resetHotkeysToDefault();
+  });
+
   ipcMain.handle("debug:ping", async () => ({ ok: true, t: Date.now() }));
+
   ipcMain.handle("dev:getState", () => getDevState());
+
+  ipcMain.handle("esi:listCharacters", () => loadEsiStore());
+
+  ipcMain.handle("esi:getActiveCharacterId", () => {
+    const s = loadEsiStore();
+    return s.activeCharacterId ?? null;
+  });
+
+  ipcMain.handle("esi:setActiveCharacterId", (_e, id: number) => {
+    const s = esiSetActiveCharacter(id);
+    return s.activeCharacterId ?? null;
+  });
+
+  ipcMain.handle("esi:addCharacter", async () => {
+    const res = await startAddCharacter();
+    if (!res.ok) return { ok: false, error: res.error || "Login failed" };
+    return { ok: true, store: loadEsiStore() };
+  });
+
+  ipcMain.handle("esi:removeCharacter", async (_e, id: number) => {
+    const s = esiRemoveCharacter(id);
+    return s;
+  });
 
   ipcMain.handle("universe:resolveSystem", async (_e, name: string) => {
     const n = String(name || "").trim();
@@ -88,21 +129,19 @@ async function boot(): Promise<void> {
       _e,
       payload: {
         mode: "auto" | "manual";
-        characterKey: string;
+        characterKey: "dev" | "esi";
+        characterId?: number;
         destinationSystem: string;
         fromSystem?: string;
         shipClass?: JumpShipClass;
+        shipName?: string;
       }
     ) => {
       const mode = payload?.mode;
-      const characterKey = String(payload?.characterKey || "").trim();
+      const characterKey = String(payload?.characterKey || "").trim() as "dev" | "esi";
       const destinationSystem = String(payload?.destinationSystem || "").trim();
 
       if (!mode || !characterKey || !destinationSystem) return { ok: false, error: "Missing input" };
-      if (characterKey !== "dev") return { ok: false, error: "Character not supported yet" };
-
-      const dev = getDevState();
-      if (!dev.enabled) return { ok: false, error: "Dev disabled" };
 
       const to = resolveSystemByName(destinationSystem);
       if (!to) return { ok: false, error: "Destination system not found" };
@@ -123,22 +162,68 @@ async function boot(): Promise<void> {
 
       let fromName = "";
       let shipClass: JumpShipClass | null = null;
+      let characterName = "";
+      let jdcLevel = 5;
 
-      if (mode === "auto") {
-        fromName = dev.systemName;
-        shipClass = shipClassFromShipName(dev.shipName);
-        if (!shipClass) return { ok: false, error: "Unknown ship for range" };
+      if (characterKey === "dev") {
+        const dev = getDevState();
+        if (!dev.enabled) return { ok: false, error: "Dev disabled" };
+
+        characterName = dev.characterName;
+        jdcLevel = dev.jumpCalibrationLevel;
+
+        if (mode === "auto") {
+          fromName = dev.systemName;
+          shipClass = shipClassFromShipName(dev.shipName);
+          if (!shipClass) return { ok: false, error: "Unknown ship for range" };
+        } else {
+          fromName = String(payload?.fromSystem || "").trim();
+          const sn = String(payload?.shipName || "").trim();
+          shipClass = payload?.shipClass ?? (sn ? shipClassFromShipName(sn) : null);
+          if (!fromName || !shipClass) return { ok: false, error: "Missing input" };
+        }
       } else {
-        fromName = String(payload?.fromSystem || "").trim();
-        shipClass = payload?.shipClass ?? null;
-        if (!fromName || !shipClass) return { ok: false, error: "Missing input" };
+        const store = loadEsiStore();
+        const characterId =
+          typeof payload?.characterId === "number" ? payload.characterId : store.activeCharacterId ?? null;
+
+        if (!characterId) return { ok: false, error: "No character linked yet" };
+
+        if (mode === "auto") {
+          const esi = await fetchEsiCharacterLocationShipAndSkills(characterId);
+          if (!esi.ok) return { ok: false, error: esi.error };
+
+          characterName = esi.characterName;
+          fromName = esi.systemName;
+          jdcLevel = esi.jdcLevel;
+
+          shipClass =
+            shipClassFromEsiType({
+              groupId: esi.shipGroupId,
+              groupName: esi.shipGroupName,
+              typeName: esi.shipTypeName,
+            }) ?? null;
+
+          if (!shipClass) return { ok: false, error: "Unknown ship for range" };
+        } else {
+          const sk = await fetchEsiCharacterJdcLevel(characterId);
+          if (!sk.ok) return { ok: false, error: sk.error };
+          characterName = sk.characterName;
+          jdcLevel = sk.jdcLevel;
+
+          fromName = String(payload?.fromSystem || "").trim();
+          const sn = String(payload?.shipName || "").trim();
+          shipClass = payload?.shipClass ?? (sn ? shipClassFromShipName(sn) : null);
+
+          if (!fromName || !shipClass) return { ok: false, error: "Missing input" };
+        }
       }
 
       const from = resolveSystemByName(fromName);
       if (!from) return { ok: false, error: "From system not found" };
 
       const baseLy = BASE_JUMP_RANGE_LY[shipClass];
-      const maxLy = calcJumpRangeLy(baseLy, dev.jumpCalibrationLevel);
+      const maxLy = calcJumpRangeLy(baseLy, jdcLevel);
 
       const distLy = calcLightyears(from.x, from.y, from.z, to.x, to.y, to.z);
       const inRange = distLy <= maxLy;
@@ -177,7 +262,7 @@ async function boot(): Promise<void> {
       return {
         ok: true,
         inRange,
-        summary: `${dev.characterName} → ${to.name}`,
+        summary: `${characterName} → ${to.name}`,
         fromSystem: from.name,
         shipClass,
         distLy,
@@ -186,7 +271,7 @@ async function boot(): Promise<void> {
         midpointsNeeded,
         route,
         hopLys,
-        jdcLevel: dev.jumpCalibrationLevel,
+        jdcLevel,
       };
     }
   );

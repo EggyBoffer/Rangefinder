@@ -117,11 +117,33 @@
         opt.textContent = label;
       }
 
+      function parseCharacterSelection(rawValue) {
+        const v = String(rawValue || "").trim();
+        if (!v) return null;
+
+        if (v === "dev") return { characterKey: "dev" };
+        if (v.startsWith("esi:")) {
+          const id = Number(v.slice(4));
+          if (Number.isFinite(id) && id > 0) return { characterKey: "esi", characterId: id };
+        }
+
+        return null;
+      }
+
       async function loadCharacters() {
         devState = { enabled: false };
 
         if (window.rangefinder && typeof window.rangefinder.getDevState === "function") {
           devState = await window.rangefinder.getDevState();
+        }
+
+        let activeId = null;
+        let esiChars = [];
+
+        if (window.rangefinder && typeof window.rangefinder.esiListCharacters === "function") {
+          const store = await window.rangefinder.esiListCharacters();
+          if (store && typeof store.activeCharacterId === "number") activeId = store.activeCharacterId;
+          if (store && Array.isArray(store.characters)) esiChars = store.characters;
         }
 
         for (const sel of [characterAuto, characterManual]) {
@@ -133,6 +155,21 @@
 
           if (devState && devState.enabled) {
             upsertOption(sel, "dev", devState.characterName);
+          }
+
+          for (const ch of esiChars) {
+            const id = Number(ch.characterId || 0);
+            if (!id) continue;
+            const name = String(ch.characterName || "").trim() || `Character ${id}`;
+            upsertOption(sel, `esi:${id}`, name);
+          }
+
+          if (activeId) {
+            const activeKey = `esi:${activeId}`;
+            const hasActive = Array.from(sel.options).some((o) => o.value === activeKey);
+            if (hasActive) sel.value = activeKey;
+            else if (devState && devState.enabled) sel.value = "dev";
+          } else if (devState && devState.enabled) {
             sel.value = "dev";
           }
 
@@ -217,14 +254,15 @@
         if (!window.rangefinder || typeof window.rangefinder.runJumpCheck !== "function") return;
 
         if (mode === "auto") {
-          const characterKey = String(characterAuto.value || "").trim();
+          const sel = parseCharacterSelection(characterAuto.value);
           const destinationSystem = String(toAuto.value || "").trim();
-          if (!characterKey || !destinationSystem) return;
+          if (!sel || !destinationSystem) return;
 
           setHint(hintAuto, "Checking...");
           const res = await window.rangefinder.runJumpCheck({
             mode: "auto",
-            characterKey,
+            characterKey: sel.characterKey,
+            characterId: sel.characterId,
             destinationSystem,
           });
 
@@ -238,16 +276,17 @@
           return;
         }
 
-        const characterKey = String(characterManual.value || "").trim();
+        const sel = parseCharacterSelection(characterManual.value);
         const shipClass = String(shipClassManual.value || "").trim();
         const fromSystem = String(fromManual.value || "").trim();
         const destinationSystem = String(toManual.value || "").trim();
-        if (!characterKey || !shipClass || !fromSystem || !destinationSystem) return;
+        if (!sel || !shipClass || !fromSystem || !destinationSystem) return;
 
         setHint(hintManual, "Checking...");
         const res = await window.rangefinder.runJumpCheck({
           mode: "manual",
-          characterKey,
+          characterKey: sel.characterKey,
+          characterId: sel.characterId,
           shipClass,
           fromSystem,
           destinationSystem,

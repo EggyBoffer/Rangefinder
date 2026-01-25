@@ -6,14 +6,17 @@
     <style>
       :root {
         --bg: #0b0f18;
-        --panel: rgba(255,255,255,0.06);
-        --panel2: rgba(255,255,255,0.08);
-        --text: rgba(255,255,255,0.92);
-        --muted: rgba(255,255,255,0.65);
-        --border: rgba(255,255,255,0.10);
+        --panel: rgba(255, 255, 255, 0.06);
+        --panel2: rgba(255, 255, 255, 0.085);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --border: rgba(255, 255, 255, 0.12);
+        --good: rgba(90, 255, 170, 0.9);
+        --bad: rgba(255, 120, 120, 0.9);
       }
 
       * { box-sizing: border-box; }
+
       body {
         margin: 0;
         font-family: Arial, sans-serif;
@@ -21,11 +24,7 @@
         color: var(--text);
       }
 
-      .window {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
+      .window { height: 100vh; display: flex; flex-direction: column; }
 
       .titlebar {
         height: 44px;
@@ -33,94 +32,121 @@
         align-items: center;
         justify-content: space-between;
         padding: 0 12px;
-        background: rgba(255,255,255,0.04);
+        background: rgba(255, 255, 255, 0.04);
         border-bottom: 1px solid var(--border);
         -webkit-app-region: drag;
         user-select: none;
       }
 
-      .title-left {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 700;
-        letter-spacing: 0.2px;
-      }
-
+      .title-left { display: flex; align-items: center; gap: 10px; font-weight: 700; }
       .pill {
         font-size: 12px;
         padding: 3px 8px;
         border-radius: 999px;
         border: 1px solid var(--border);
         color: var(--muted);
-        background: rgba(255,255,255,0.03);
+        background: rgba(255, 255, 255, 0.03);
       }
 
-      .title-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        -webkit-app-region: no-drag;
-      }
+      .title-actions { display: flex; align-items: center; gap: 8px; -webkit-app-region: no-drag; }
 
       .btn {
         border: 1px solid var(--border);
-        background: rgba(255,255,255,0.05);
+        background: rgba(255, 255, 255, 0.05);
         color: var(--text);
-        height: 28px;
-        padding: 0 10px;
+        height: 30px;
+        padding: 0 12px;
         border-radius: 10px;
         cursor: pointer;
       }
+      .btn:hover { background: rgba(255, 255, 255, 0.08); }
+      .btn:active { transform: translateY(1px); }
+      .btn-close { width: 36px; padding: 0; font-size: 16px; line-height: 30px; }
 
-      .btn:hover {
-        background: rgba(255,255,255,0.08);
-      }
-
-      .btn-close {
-        width: 36px;
-        padding: 0;
-        font-size: 16px;
-        line-height: 28px;
-      }
-
-      .content {
-        padding: 18px;
-        flex: 1;
-        overflow: auto;
-      }
+      .content { padding: 18px; flex: 1; overflow: auto; }
 
       .card {
-        max-width: 860px;
+        max-width: 900px;
+        margin: 0 auto;
         border: 1px solid var(--border);
         background: var(--panel);
         border-radius: 16px;
-        padding: 16px;
+        padding: 18px;
       }
 
-      h1 { margin: 0 0 8px; font-size: 18px; }
-      p { margin: 8px 0; color: var(--muted); }
+      h1 { margin: 0; font-size: 18px; }
+      .sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 
-      .row {
-        margin-top: 14px;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
+      .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr; gap: 12px; }
 
-      .box {
+      .section {
         border: 1px solid var(--border);
         background: var(--panel2);
         border-radius: 14px;
-        padding: 12px;
+        padding: 14px;
       }
 
-      .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-      code {
-        background: rgba(255,255,255,0.08);
-        padding: 2px 6px;
-        border-radius: 8px;
+      .section-title { font-weight: 700; margin-bottom: 6px; }
+      .section-desc { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+
+      .row3 {
+        display: grid;
+        grid-template-columns: 170px 1fr 110px;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .label { font-size: 12px; color: var(--muted); }
+      .input {
+        height: 34px; width: 100%;
+        padding: 0 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
         color: var(--text);
+        outline: none;
+      }
+      .input.capturing {
+        border-color: rgba(120, 200, 255, 0.6);
+        box-shadow: 0 0 0 3px rgba(120, 200, 255, 0.12);
+      }
+
+      .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+
+      .status { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; }
+      .status.good { color: var(--good); }
+      .status.bad { color: var(--bad); }
+
+      .charList { display: flex; flex-direction: column; gap: 8px; }
+      .charRow {
+        display: grid;
+        grid-template-columns: 1fr 110px;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--border);
+        background: rgba(0,0,0,0.15);
+        border-radius: 12px;
+      }
+      .charName { font-weight: 700; }
+      .charMeta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .tagActive {
+        display: inline-block;
+        margin-left: 8px;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--good);
+        background: rgba(90, 255, 170, 0.08);
+        vertical-align: middle;
+      }
+
+      @media (max-width: 720px) {
+        .row3 { grid-template-columns: 1fr; }
+        .charRow { grid-template-columns: 1fr; }
+        .actions { justify-content: flex-start; }
       }
     </style>
   </head>
@@ -138,18 +164,53 @@
 
       <div class="content">
         <div class="card">
-          <h1>Rangefinder</h1>
-          <p>Shell is running. Next: SSO + character list + universe DB.</p>
-          <p>Hotkey: <code>Ctrl + Shift + J</code></p>
+          <div>
+            <h1>Settings</h1>
+            <div class="sub">Hotkeys and characters.</div>
+          </div>
 
-          <div class="row">
-            <div class="box">
-              <div class="label">Characters</div>
-              <div>Not configured yet</div>
+          <div class="grid">
+            <div class="section">
+              <div class="section-title">Hotkeys</div>
+              <div class="section-desc">Click Capture, press a combo, then Save.</div>
+
+              <div class="row3">
+                <div class="label">Auto popup</div>
+                <input class="input" id="hkAuto" spellcheck="false" autocomplete="off" />
+                <button class="btn" id="capAuto">Capture</button>
+              </div>
+
+              <div class="row3">
+                <div class="label">Manual popup</div>
+                <input class="input" id="hkManual" spellcheck="false" autocomplete="off" />
+                <button class="btn" id="capManual">Capture</button>
+              </div>
+
+              <div class="row3" style="margin-bottom:0;">
+                <div class="label">Hide popup</div>
+                <input class="input" id="hkClose" spellcheck="false" autocomplete="off" />
+                <button class="btn" id="capClose">Capture</button>
+              </div>
+
+              <div class="actions">
+                <button class="btn" id="btnReset">Reset</button>
+                <button class="btn" id="btnSave">Save</button>
+              </div>
+
+              <div class="status" id="hkStatus"></div>
             </div>
-            <div class="box">
-              <div class="label">Polling</div>
-              <div>Not configured yet</div>
+
+            <div class="section">
+              <div class="section-title">Characters</div>
+              <div class="section-desc">Add and remove characters. No setup required.</div>
+
+              <div class="actions" style="justify-content:flex-start;">
+                <button class="btn" id="btnAddChar">Add Character</button>
+              </div>
+
+              <div class="status" id="esiStatus"></div>
+
+              <div class="charList" id="charList"></div>
             </div>
           </div>
         </div>
@@ -157,12 +218,228 @@
     </div>
 
     <script>
-      const btn = document.getElementById("btnClose");
-      btn.addEventListener("click", () => {
+      const btnClose = document.getElementById("btnClose");
+
+      const hkAuto = document.getElementById("hkAuto");
+      const hkManual = document.getElementById("hkManual");
+      const hkClose = document.getElementById("hkClose");
+
+      const capAuto = document.getElementById("capAuto");
+      const capManual = document.getElementById("capManual");
+      const capClose = document.getElementById("capClose");
+
+      const btnSave = document.getElementById("btnSave");
+      const btnReset = document.getElementById("btnReset");
+
+      const hkStatus = document.getElementById("hkStatus");
+
+      const btnAddChar = document.getElementById("btnAddChar");
+      const esiStatus = document.getElementById("esiStatus");
+      const charList = document.getElementById("charList");
+
+      let capturing = null;
+
+      function setStatus(el, kind, msg) {
+        el.classList.remove("good", "bad");
+        if (kind) el.classList.add(kind);
+        el.textContent = msg || "";
+      }
+
+      function clearCaptureState() {
+        capturing = null;
+        hkAuto.classList.remove("capturing");
+        hkManual.classList.remove("capturing");
+        hkClose.classList.remove("capturing");
+      }
+
+      function startCapture(input) {
+        clearCaptureState();
+        capturing = input;
+        input.classList.add("capturing");
+        input.focus();
+        input.value = "Press keys...";
+        setStatus(hkStatus, null, "");
+      }
+
+      function normalizeKeyName(key) {
+        const k = String(key || "");
+        if (!k) return "";
+        if (k === " ") return "Space";
+        if (k === "Escape") return "Esc";
+        if (k === "ArrowUp") return "Up";
+        if (k === "ArrowDown") return "Down";
+        if (k === "ArrowLeft") return "Left";
+        if (k === "ArrowRight") return "Right";
+        if (k === "Enter") return "Enter";
+        if (k === "Tab") return "Tab";
+        if (k === "Backspace") return "Backspace";
+        if (k === "Delete") return "Delete";
+        if (k === "Home") return "Home";
+        if (k === "End") return "End";
+        if (k === "PageUp") return "PageUp";
+        if (k === "PageDown") return "PageDown";
+        if (k.startsWith("F") && /^F\\d+$/.test(k)) return k;
+        if (k.length === 1) return k.toUpperCase();
+        return k;
+      }
+
+      function isOnlyModifier(e) {
+        const k = String(e.key || "");
+        return k === "Shift" || k === "Control" || k === "Alt" || k === "Meta";
+      }
+
+      function buildAccelerator(e) {
+        const parts = [];
+        if (e.ctrlKey) parts.push("Control");
+        if (e.shiftKey) parts.push("Shift");
+        if (e.altKey) parts.push("Alt");
+        if (e.metaKey) parts.push("Command");
+
+        const keyName = normalizeKeyName(e.key);
+        if (!keyName) return null;
+
+        const modlessKeys = new Set(["Esc", "Enter", "Tab"]);
+        if (parts.length === 0 && !modlessKeys.has(keyName)) return null;
+
+        parts.push(keyName);
+        return parts.join("+");
+      }
+
+      document.addEventListener("keydown", async (e) => {
+        if (!capturing) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isOnlyModifier(e)) return;
+
+        const acc = buildAccelerator(e);
+        if (!acc) {
+          capturing.value = "Use modifiers (Ctrl/Alt/Shift)";
+          return;
+        }
+
+        capturing.value = acc;
+        clearCaptureState();
+      });
+
+      btnClose.addEventListener("click", () => {
         if (window.rangefinder && typeof window.rangefinder.hideSettings === "function") {
           window.rangefinder.hideSettings();
         }
       });
+
+      capAuto.addEventListener("click", () => startCapture(hkAuto));
+      capManual.addEventListener("click", () => startCapture(hkManual));
+      capClose.addEventListener("click", () => startCapture(hkClose));
+
+      btnSave.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.setHotkeys !== "function") return;
+
+        const payload = {
+          popupAuto: String(hkAuto.value || "").trim(),
+          popupManual: String(hkManual.value || "").trim(),
+          hidePopup: String(hkClose.value || "").trim(),
+        };
+
+        const res = await window.rangefinder.setHotkeys(payload);
+        if (res && res.ok) setStatus(hkStatus, "good", "Saved. Hotkeys applied immediately.");
+        else setStatus(hkStatus, "bad", (res && res.error) || "Failed to save hotkeys");
+      });
+
+      btnReset.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.resetHotkeys !== "function") return;
+        const res = await window.rangefinder.resetHotkeys();
+        if (res && res.ok) {
+          await loadHotkeys();
+          setStatus(hkStatus, "good", "Reset to defaults.");
+        } else {
+          setStatus(hkStatus, "bad", (res && res.error) || "Failed to reset");
+        }
+      });
+
+      async function loadHotkeys() {
+        if (!window.rangefinder || typeof window.rangefinder.getHotkeys !== "function") return;
+        const hk = await window.rangefinder.getHotkeys();
+        if (!hk) return;
+        hkAuto.value = hk.popupAuto || "";
+        hkManual.value = hk.popupManual || "";
+        hkClose.value = hk.hidePopup || "";
+      }
+
+      function renderCharacters(store) {
+        charList.innerHTML = "";
+        const chars = Array.isArray(store?.characters) ? store.characters : [];
+        const activeId = store?.activeCharacterId ?? null;
+
+        if (!chars.length) {
+          const empty = document.createElement("div");
+          empty.className = "charMeta";
+          empty.textContent = "No characters added yet.";
+          charList.appendChild(empty);
+          return;
+        }
+
+        for (const c of chars) {
+          const row = document.createElement("div");
+          row.className = "charRow";
+
+          const left = document.createElement("div");
+          const name = document.createElement("div");
+          name.className = "charName";
+          name.textContent = c.characterName || ("Character " + c.characterId);
+
+          if (activeId && c.characterId === activeId) {
+            const tag = document.createElement("span");
+            tag.className = "tagActive";
+            tag.textContent = "ACTIVE";
+            name.appendChild(tag);
+          }
+
+          const meta = document.createElement("div");
+          meta.className = "charMeta";
+          meta.textContent = `ID ${c.characterId}`;
+
+          left.appendChild(name);
+          left.appendChild(meta);
+
+          const btn = document.createElement("button");
+          btn.className = "btn";
+          btn.textContent = "Remove";
+          btn.addEventListener("click", async () => {
+            if (!window.rangefinder || typeof window.rangefinder.esiRemoveCharacter !== "function") return;
+            setStatus(esiStatus, null, "");
+            const updated = await window.rangefinder.esiRemoveCharacter(c.characterId);
+            renderCharacters(updated);
+            setStatus(esiStatus, "good", "Character removed.");
+          });
+
+          row.appendChild(left);
+          row.appendChild(btn);
+          charList.appendChild(row);
+        }
+      }
+
+      async function loadCharacters() {
+        if (!window.rangefinder || typeof window.rangefinder.esiListCharacters !== "function") return;
+        const store = await window.rangefinder.esiListCharacters();
+        renderCharacters(store);
+      }
+
+      btnAddChar.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.esiAddCharacter !== "function") return;
+        setStatus(esiStatus, null, "");
+        const res = await window.rangefinder.esiAddCharacter();
+        if (!res || !res.ok) {
+          setStatus(esiStatus, "bad", (res && res.error) || "Failed to add character.");
+          return;
+        }
+        const store = res.store;
+        renderCharacters(store);
+        setStatus(esiStatus, "good", "Character added.");
+      });
+
+      loadHotkeys();
+      loadCharacters();
     </script>
   </body>
 </html>

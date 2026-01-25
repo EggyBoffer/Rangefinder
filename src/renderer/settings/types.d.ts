@@ -4,29 +4,28 @@ declare global {
   interface Window {
     rangefinder?: {
       hideSettings?: () => void;
-      hidePopup?: () => void;
 
-      getDevState?: () => Promise<
-        | { enabled: false }
-        | {
-            enabled: true;
-            characterName: string;
-            systemName: string;
-            shipName: string;
-            jumpCalibrationLevel: number;
-          }
+      getHotkeys?: () => Promise<{ popupAuto: string; popupManual: string; hidePopup: string }>;
+      setHotkeys?: (hotkeys: { popupAuto: string; popupManual: string; hidePopup: string }) => Promise<
+        { ok: true } | { ok: false; error: string }
       >;
+      resetHotkeys?: () => Promise<{ ok: true } | { ok: false; error: string }>;
 
-      onPopupReset?: (fn: () => void) => void;
-      onPopupMode?: (fn: (mode: "auto" | "manual") => void) => void;
+      esiListCharacters?: () => Promise<{
+        characters: {
+          characterId: number;
+          characterName: string;
+          expiresAt: number;
+          updatedAt: number;
+        }[];
+        activeCharacterId: number | null;
+      }>;
 
-      runJumpCheck?: (payload: {
-        mode: "auto" | "manual";
-        characterKey: string;
-        destinationSystem: string;
-        fromSystem?: string;
-        shipClass?: "BLACK_OPS" | "JUMP_FREIGHTER" | "CAPITAL" | "SUPERCAP" | "RORQUAL" | "LANCER";
-      }) => Promise<any>;
+      esiGetActiveCharacterId?: () => Promise<number | null>;
+      esiSetActiveCharacterId?: (id: number) => Promise<number | null>;
+
+      esiAddCharacter?: () => Promise<{ ok: boolean; error?: string; store?: any }>;
+      esiRemoveCharacter?: (id: number) => Promise<any>;
     };
   }
 }

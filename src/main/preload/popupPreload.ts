@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 type JumpShipClass = "BLACK_OPS" | "JUMP_FREIGHTER" | "CAPITAL" | "SUPERCAP" | "RORQUAL" | "LANCER";
+type CharacterKey = "dev" | "esi";
 
 contextBridge.exposeInMainWorld("rangefinder", {
   hidePopup: () => ipcRenderer.send("popup:hide"),
@@ -10,7 +11,8 @@ contextBridge.exposeInMainWorld("rangefinder", {
 
   runJumpCheck: (payload: {
     mode: "auto" | "manual";
-    characterKey: string;
+    characterKey: CharacterKey;
+    characterId?: number;
     destinationSystem: string;
     fromSystem?: string;
     shipClass?: JumpShipClass;
@@ -31,4 +33,7 @@ contextBridge.exposeInMainWorld("rangefinder", {
   resolveSystem: (name: string) => ipcRenderer.invoke("universe:resolveSystem", name),
 
   ping: () => ipcRenderer.invoke("debug:ping"),
+
+  esiListCharacters: () => ipcRenderer.invoke("esi:listCharacters"),
+  esiGetActiveCharacterId: () => ipcRenderer.invoke("esi:getActiveCharacterId"),
 });

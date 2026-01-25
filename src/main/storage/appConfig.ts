@@ -4,10 +4,20 @@ import * as path from "path";
 
 export type AppConfig = {
   hasLaunchedBefore: boolean;
+  hotkeys: {
+    popupAuto: string;
+    popupManual: string;
+    hidePopup: string;
+  };
 };
 
 const DEFAULT_CONFIG: AppConfig = {
   hasLaunchedBefore: false,
+  hotkeys: {
+    popupAuto: "Control+Shift+J",
+    popupManual: "Control+Shift+P",
+    hidePopup: "Control+Shift+K",
+  },
 };
 
 function getConfigPath(): string {
@@ -24,6 +34,11 @@ export function loadConfig(): AppConfig {
 
     return {
       hasLaunchedBefore: Boolean(parsed.hasLaunchedBefore),
+      hotkeys: {
+        popupAuto: String((parsed as any)?.hotkeys?.popupAuto || DEFAULT_CONFIG.hotkeys.popupAuto),
+        popupManual: String((parsed as any)?.hotkeys?.popupManual || DEFAULT_CONFIG.hotkeys.popupManual),
+        hidePopup: String((parsed as any)?.hotkeys?.hidePopup || DEFAULT_CONFIG.hotkeys.hidePopup),
+      },
     };
   } catch {
     return { ...DEFAULT_CONFIG };

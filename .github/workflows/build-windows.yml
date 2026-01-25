@@ -27,7 +27,9 @@ jobs:
         run: npm ci
 
       - name: Build Installer
-        run: npm run dist:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:win -- --publish never
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

@@ -1,11 +1,12 @@
 {
   "name": "eve-jump-tracker",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Rangefinder (EVE Online jump planner)",
   "main": "dist/main/main.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run copy:renderer",
+    "copy:renderer": "node scripts/copy-renderer.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "start": "npm run build && npm run rebuild && electron .",
     "dev": "set RANGEFINDER_DEV=1&& npm run start",
@@ -56,15 +57,9 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ],
-      "artifactName": "Rangefinder-${version}-${arch}-${os}-${target}.${ext}"
+      "artifactName": "Rangefinder-Setup-${version}-win-x64.${ext}"
     },
     "nsis": {
       "oneClick": false,

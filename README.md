@@ -28,17 +28,12 @@ Works for all ships capable of using a jump drive, the automatic mode will find 
 - Pick any ship class
 - Enter start and destination systems
 - Still uses your character’s skills
-- Perfect for planning and theorycrafting
+- Perfect for planning routes!
 
 ### 🔹 Cyno Routing
 - Automatically finds valid cyno chains
 - Shows hop-by-hop distances
 - Provides a route that will work!
-
-### 🔹 Multi-Character Support
-- Add multiple ESI-linked characters
-- Switch characters directly from the popup
-- Remove characters at any time
 
 ---
 
@@ -53,8 +48,6 @@ Works for all ships capable of using a jump drive, the automatic mode will find 
 ### Route Results
 ![Route Results](screenshots/route-results.png)
 
-### Settings – Characters & Hotkeys
-![Settings](screenshots/settings.png)
 
 ---
 

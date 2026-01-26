@@ -81,9 +81,7 @@ https://discord.gg/M87HtnjBYg
 
 - Secure ESI OAuth character linking
 - Live character location, ship, and skill data
-- Cached universe data for fast lookups
-- Real cyno rules and distance math
-- Built with **Electron + TypeScript**
+
 
 ---
 

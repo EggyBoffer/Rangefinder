@@ -7,7 +7,7 @@ import { hidePopupWindow, registerPopupDebugHotkeys, setPopupResultMode } from "
 import { isDevMode } from "./shared/env";
 import { setDevState, getDevState } from "./storage/devState";
 import { ensureUniverseReady } from "./universe/universeBootstrap";
-import { resolveSystemByName, getSystemById } from "./universe/universeDb";
+import { resolveSystemByName, getSystemById, suggestSystemsByName } from "./universe/universeDb";
 import { calcLightyears } from "./universe/universeMath";
 import {
   BASE_JUMP_RANGE_LY,
@@ -18,12 +18,17 @@ import {
 } from "./jump/jumpRange";
 import { findRouteESI } from "./planner/routePlanner";
 import { fetchSystemRegionName, fetchSystemSecurityStatus } from "./universe/esiPublic";
-import { loadEsiStore, removeCharacter as esiRemoveCharacter, setActiveCharacter as esiSetActiveCharacter } from "./esi/esiStore";
+import {
+  loadEsiStore,
+  removeCharacter as esiRemoveCharacter,
+  setActiveCharacter as esiSetActiveCharacter,
+} from "./esi/esiStore";
 import { startAddCharacter, fetchEsiCharacterLocationShipAndSkills, fetchEsiCharacterJdcLevel } from "./esi/esiAuth";
+import { maybeShowUpdatePopup } from "./updater/updateNotify";
 
 const APP_NAME = "Rangefinder";
 
-const FORBIDDEN_REGIONS = new Set(["pochven", "a821-a", "jzh7-f", "uu4-fa"]);
+const FORBIDDEN_REGIONS = new Set(["pochven", "a821-a", "j7hz-f", "uua-f4"]);
 
 function isForbiddenRegion(regionName: string | null): boolean {
   const n = String(regionName || "").trim().toLowerCase();
@@ -123,6 +128,13 @@ async function boot(): Promise<void> {
     return resolveSystemByName(n);
   });
 
+  ipcMain.handle("universe:suggestSystems", async (_e, query: string, limit?: number) => {
+    const q = String(query || "").trim();
+    if (!q) return [];
+    const lim = typeof limit === "number" && Number.isFinite(limit) ? Math.max(1, Math.min(25, Math.floor(limit))) : 10;
+    return suggestSystemsByName(q, lim);
+  });
+
   ipcMain.handle(
     "jumpcheck:run",
     async (
@@ -149,7 +161,7 @@ async function boot(): Promise<void> {
       if (await isForbiddenSystem(to.id)) {
         return {
           ok: false,
-          error: "That destination is in a region that cannot be used (Pochven / A821-A / JZH7-F / UU4-FA).",
+          error: "That destination is in a region that cannot be used (Pochven / A821-A / J7HZ-F / UUA-F4).",
         };
       }
 
@@ -294,6 +306,10 @@ async function boot(): Promise<void> {
     cfg.hasLaunchedBefore = true;
     saveConfig(cfg);
   }
+
+  setTimeout(() => {
+    maybeShowUpdatePopup().catch(() => {});
+  }, 1200);
 }
 
 app.whenReady().then(() => {

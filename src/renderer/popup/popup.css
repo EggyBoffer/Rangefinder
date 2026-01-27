@@ -139,3 +139,33 @@ body[data-mode="auto"] #inputsManual {
 body[data-mode="manual"] #inputsAuto {
   display: none;
 }
+
+.suggestBox {
+  display: none;
+  z-index: 9999;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.suggestItem {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.suggestItem:hover,
+.suggestItem.active {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
+}

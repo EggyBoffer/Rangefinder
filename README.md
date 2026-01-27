@@ -32,7 +32,6 @@ Works for all ships capable of using a jump drive, the automatic mode will find 
 
 ### 🔹 Cyno Routing
 - Automatically finds valid cyno chains
-- Shows hop-by-hop distances
 - Provides a route that will work!
 
 ---

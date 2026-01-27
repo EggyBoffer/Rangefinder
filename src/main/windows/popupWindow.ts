@@ -23,7 +23,7 @@ function getPopupHtmlPath(): string {
   const appPath = app.getAppPath();
   return firstExisting([
     path.join(appPath, "dist", "renderer", "popup", "index.html"),
-    path.join(process.cwd(), "dist", "renderer", "popup", "index.html")
+    path.join(process.cwd(), "dist", "renderer", "popup", "index.html"),
   ]);
 }
 
@@ -32,7 +32,7 @@ function getPreloadPath(): string {
   return firstExisting([
     path.join(base, "preload", "popupPreload.js"),
     path.join(app.getAppPath(), "dist", "main", "preload", "popupPreload.js"),
-    path.join(process.cwd(), "dist", "main", "preload", "popupPreload.js")
+    path.join(process.cwd(), "dist", "main", "preload", "popupPreload.js"),
   ]);
 }
 
@@ -40,7 +40,11 @@ function centerOnCursor(win: BrowserWindow, w: number, h: number): void {
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
   const { x, y, width, height } = display.workArea;
-  win.setPosition(Math.round(x + width / 2 - w / 2), Math.round(y + height / 2 - h / 2), false);
+  win.setPosition(
+    Math.round(x + width / 2 - w / 2),
+    Math.round(y + height / 2 - h / 2),
+    false
+  );
 }
 
 function applySize(win: BrowserWindow, h: number): void {
@@ -67,8 +71,8 @@ function ensureWindow(): BrowserWindow {
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      nodeIntegration: false,
+    },
   });
 
   popupWindow.on("close", (e) => {
@@ -92,8 +96,8 @@ function ensureWindow(): BrowserWindow {
 function sendPopupState(win: BrowserWindow, mode: "auto" | "manual"): void {
   const send = () => {
     if (win.isDestroyed()) return;
-    win.webContents.send("popup:mode", mode);
     win.webContents.send("popup:reset");
+    win.webContents.send("popup:mode", mode);
   };
 
   if (win.webContents.isLoading()) {
@@ -112,7 +116,7 @@ export function showPopupWindow(mode: "auto" | "manual"): void {
   sendPopupState(win, mode);
 }
 
-export function togglePopupWindow(mode: "auto" | "manual" = "auto"): void {
+export function togglePopupWindow(mode: "auto" | "manual"): void {
   const win = ensureWindow();
   if (win.isVisible()) {
     hidePopupWindow();

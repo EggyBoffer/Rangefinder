@@ -1,6 +1,6 @@
 {
-  "name": "eve-jump-tracker",
-  "version": "0.1.0",
+  "name": "rangefinder",
+  "version": "1.1.0",
   "description": "Rangefinder (EVE Online jump planner)",
   "main": "dist/main/main.js",
   "type": "commonjs",

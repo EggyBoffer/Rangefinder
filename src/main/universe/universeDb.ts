@@ -148,6 +148,36 @@ export function resolveSystemByName(name: string): {
   };
 }
 
+export function suggestSystemsByName(
+  query: string,
+  limit: number
+): Array<{ id: number; name: string; security: number; secStatus: number | null }> {
+  const d = openDb();
+  const q0 = String(query || "").trim().toLowerCase();
+  if (!q0) return [];
+
+  const lim = Number.isFinite(limit) ? Math.max(1, Math.min(25, Math.floor(limit))) : 10;
+  const escaped = q0.replace(/[%_\\]/g, "\\$&");
+  const like = `${escaped}%`;
+
+  const rows = d
+    .prepare(
+      `SELECT id, name, security, sec_status as secStatus
+       FROM systems
+       WHERE name_lc LIKE ? ESCAPE '\\'
+       ORDER BY (name_lc = ?) DESC, LENGTH(name) ASC, name ASC
+       LIMIT ?`
+    )
+    .all(like, q0, lim) as any[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    security: row.security,
+    secStatus: row.secStatus === null ? null : Number(row.secStatus),
+  }));
+}
+
 export function getSystemById(id: number): {
   id: number;
   name: string;

@@ -9,6 +9,7 @@ export type AppConfig = {
     popupManual: string;
     hidePopup: string;
   };
+  lastUpdatePromptedVersion: string;
 };
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -18,6 +19,7 @@ const DEFAULT_CONFIG: AppConfig = {
     popupManual: "Control+Shift+P",
     hidePopup: "Control+Shift+K",
   },
+  lastUpdatePromptedVersion: "",
 };
 
 function getConfigPath(): string {
@@ -39,6 +41,7 @@ export function loadConfig(): AppConfig {
         popupManual: String((parsed as any)?.hotkeys?.popupManual || DEFAULT_CONFIG.hotkeys.popupManual),
         hidePopup: String((parsed as any)?.hotkeys?.hidePopup || DEFAULT_CONFIG.hotkeys.hidePopup),
       },
+      lastUpdatePromptedVersion: String((parsed as any)?.lastUpdatePromptedVersion || ""),
     };
   } catch {
     return { ...DEFAULT_CONFIG };

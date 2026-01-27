@@ -4,7 +4,7 @@ import { fetchSystemRegionName, fetchSystemSecurityStatus } from "../universe/es
 
 const LY_IN_METERS = 9460730472580800;
 
-const FORBIDDEN_REGIONS = new Set(["pochven", "a821-a", "jzh7-f", "uu4-fa"]);
+const FORBIDDEN_REGIONS = new Set(["pochven", "a821-a", "j7hz-f", "uua-f4"]);
 
 type RouteResult = { jumps: number; path: number[] } | null;
 
@@ -13,6 +13,39 @@ const secPending = new Map<number, Promise<number | null>>();
 
 const regionCache = new Map<number, string>();
 const regionPending = new Map<number, Promise<string | null>>();
+
+const ROUTE_CACHE_TTL_MS = 10 * 60 * 1000;
+const ROUTE_CACHE_MAX = 600;
+
+const routeCache = new Map<string, { t: number; r: RouteResult }>();
+
+function nowMs(): number {
+  return Date.now();
+}
+
+function routeKey(fromId: number, toId: number, maxLy: number, maxDepth: number): string {
+  const ly10 = Math.round(maxLy * 10);
+  return `${fromId}|${toId}|${ly10}|${maxDepth}`;
+}
+
+function cacheGet(key: string): RouteResult | undefined {
+  const v = routeCache.get(key);
+  if (!v) return undefined;
+  if (nowMs() - v.t > ROUTE_CACHE_TTL_MS) {
+    routeCache.delete(key);
+    return undefined;
+  }
+  routeCache.delete(key);
+  routeCache.set(key, v);
+  return v.r;
+}
+
+function cacheSet(key: string, r: RouteResult): void {
+  routeCache.set(key, { t: nowMs(), r });
+  if (routeCache.size <= ROUTE_CACHE_MAX) return;
+  const oldestKey = routeCache.keys().next().value as string | undefined;
+  if (oldestKey) routeCache.delete(oldestKey);
+}
 
 function isWormholeName(name: string): boolean {
   const n = String(name || "").trim();
@@ -159,36 +192,108 @@ async function getNeighbors(fromId: number, maxLy: number): Promise<number[]> {
   return out;
 }
 
-export async function findRouteESI(fromId: number, toId: number, maxLy: number, maxDepth: number): Promise<RouteResult> {
-  const [toSec, toRegion] = await Promise.all([getSec(toId), getRegionName(toId)]);
-  if (!isCynoAllowed(toSec)) return null;
-  if (isForbiddenRegion(toRegion)) return null;
+type HeapItem = { id: number; depth: number; score: number };
 
-  const q: Array<{ id: number; depth: number }> = [{ id: fromId, depth: 0 }];
-  const seen = new Set<number>([fromId]);
+function heapPush(heap: HeapItem[], item: HeapItem): void {
+  heap.push(item);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const p = (i - 1) >> 1;
+    if (heap[p].score <= heap[i].score) break;
+    const tmp = heap[p];
+    heap[p] = heap[i];
+    heap[i] = tmp;
+    i = p;
+  }
+}
+
+function heapPop(heap: HeapItem[]): HeapItem | undefined {
+  const n = heap.length;
+  if (!n) return undefined;
+  const top = heap[0];
+  const last = heap.pop() as HeapItem;
+  if (n > 1) {
+    heap[0] = last;
+    let i = 0;
+    for (;;) {
+      const l = i * 2 + 1;
+      const r = l + 1;
+      let m = i;
+      if (l < heap.length && heap[l].score < heap[m].score) m = l;
+      if (r < heap.length && heap[r].score < heap[m].score) m = r;
+      if (m === i) break;
+      const tmp = heap[m];
+      heap[m] = heap[i];
+      heap[i] = tmp;
+      i = m;
+    }
+  }
+  return top;
+}
+
+function estimateRemainingHops(fromId: number, toId: number, maxLy: number): number {
+  const a = getSystemById(fromId);
+  const b = getSystemById(toId);
+  if (!a || !b) return 0;
+  const d = calcLightyears(a.x, a.y, a.z, b.x, b.y, b.z);
+  if (!Number.isFinite(d) || d <= 0) return 0;
+  if (!Number.isFinite(maxLy) || maxLy <= 0) return 0;
+  return d / maxLy;
+}
+
+export async function findRouteESI(fromId: number, toId: number, maxLy: number, maxDepth: number): Promise<RouteResult> {
+  if (fromId === toId) return { jumps: 0, path: [fromId] };
+
+  const key = routeKey(fromId, toId, maxLy, maxDepth);
+  const cached = cacheGet(key);
+  if (typeof cached !== "undefined") return cached;
+
+  const [toSec, toRegion] = await Promise.all([getSec(toId), getRegionName(toId)]);
+  if (!isCynoAllowed(toSec)) {
+    cacheSet(key, null);
+    return null;
+  }
+  if (isForbiddenRegion(toRegion)) {
+    cacheSet(key, null);
+    return null;
+  }
+
   const parents = new Map<number, number | null>();
   parents.set(fromId, null);
 
-  while (q.length) {
-    const cur = q.shift()!;
+  const bestDepth = new Map<number, number>();
+  bestDepth.set(fromId, 0);
+
+  const heap: HeapItem[] = [];
+  heapPush(heap, { id: fromId, depth: 0, score: estimateRemainingHops(fromId, toId, maxLy) });
+
+  while (heap.length) {
+    const cur = heapPop(heap) as HeapItem;
     if (cur.depth >= maxDepth) continue;
 
     const neigh = await getNeighbors(cur.id, maxLy);
 
     for (const nid of neigh) {
-      if (seen.has(nid)) continue;
+      const nd = cur.depth + 1;
 
+      const prev = bestDepth.get(nid);
+      if (typeof prev === "number" && prev <= nd) continue;
+
+      bestDepth.set(nid, nd);
       parents.set(nid, cur.id);
 
       if (nid === toId) {
         const path = rebuildPath(parents, toId);
-        return { jumps: path.length - 1, path };
+        const res = { jumps: path.length - 1, path };
+        cacheSet(key, res);
+        return res;
       }
 
-      seen.add(nid);
-      q.push({ id: nid, depth: cur.depth + 1 });
+      const score = nd + estimateRemainingHops(nid, toId, maxLy);
+      heapPush(heap, { id: nid, depth: nd, score });
     }
   }
 
+  cacheSet(key, null);
   return null;
 }

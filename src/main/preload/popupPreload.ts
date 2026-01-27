@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld("rangefinder", {
 
   resolveSystem: (name: string) => ipcRenderer.invoke("universe:resolveSystem", name),
 
+  suggestSystems: (query: string, limit?: number) => ipcRenderer.invoke("universe:suggestSystems", query, limit),
+
   ping: () => ipcRenderer.invoke("debug:ping"),
 
   esiListCharacters: () => ipcRenderer.invoke("esi:listCharacters"),

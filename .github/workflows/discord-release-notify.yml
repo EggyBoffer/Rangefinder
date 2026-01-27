@@ -1,0 +1,30 @@
+name: Notify Discord on Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post release info to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d "{
+            \"username\": \"Rangefinder Bot\",
+            \"embeds\": [{
+              \"title\": \"✨ Rangefinder ${TAG_NAME} Released!\",
+              \"description\": \"${RELEASE_NAME}\",
+              \"url\": \"${RELEASE_URL}\",
+              \"color\": 5814783,
+              \"footer\": { \"text\": \"Published by ${{ github.actor }}\" },
+              \"timestamp\": \"$(date --utc +%Y-%m-%dT%H:%M:%SZ)\"
+            }]
+          }" $DISCORD_WEBHOOK

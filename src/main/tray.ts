@@ -6,27 +6,29 @@ import { showPopupWindow } from "./windows/popupWindow";
 
 let tray: Tray | null = null;
 
-function resolveTrayIconPath(): string | null {
+function resolveTrayIconPath(): string {
+  const appPath = app.getAppPath();
+
   const candidates = [
-    path.join(process.cwd(), "assets", "icons", "tray.png"),
-    path.join(app.getAppPath(), "assets", "icons", "tray.png"),
-    path.join(path.dirname(app.getPath("exe")), "assets", "icons", "tray.png"),
+    path.join(appPath, "assets", "icon.ico"),
+    path.join(process.resourcesPath, "app.asar", "assets", "icon.ico"),
+    path.join(process.resourcesPath, "assets", "icon.ico"),
   ];
 
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
 
-  return null;
+  return candidates[0];
 }
 
 export function createTray(): Tray {
   if (tray) return tray;
 
   const iconPath = resolveTrayIconPath();
-  const img = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+  const icon = nativeImage.createFromPath(iconPath);
 
-  tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
+  tray = new Tray(icon);
   tray.setToolTip("Rangefinder");
 
   const menu = Menu.buildFromTemplate([
@@ -37,10 +39,8 @@ export function createTray(): Tray {
     { label: "Quit", click: () => app.quit() },
   ]);
 
-  const pop = () => tray?.popUpContextMenu(menu);
-
-  tray.on("click", () => pop());
-  tray.on("right-click", () => pop());
+  tray.on("click", () => tray?.popUpContextMenu(menu));
+  tray.on("right-click", () => tray?.popUpContextMenu(menu));
   tray.on("double-click", () => showPopupWindow("auto"));
 
   return tray;

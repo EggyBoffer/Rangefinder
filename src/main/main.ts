@@ -4,6 +4,7 @@ import { getHotkeys, registerHotkeys, resetHotkeysToDefault, setHotkeys, type Ho
 import { loadConfig, saveConfig } from "./storage/appConfig";
 import { showSettingsWindow, setAppIsQuitting, hideSettingsWindow } from "./windows/settingsWindow";
 import { hidePopupWindow, registerPopupDebugHotkeys, setPopupResultMode } from "./windows/popupWindow";
+import { hideIntelWindow } from "./windows/intelWindow";
 import { isDevMode } from "./shared/env";
 import { setDevState, getDevState } from "./storage/devState";
 import { ensureUniverseReady } from "./universe/universeBootstrap";
@@ -25,6 +26,7 @@ import {
 } from "./esi/esiStore";
 import { startAddCharacter, fetchEsiCharacterLocationShipAndSkills, fetchEsiCharacterJdcLevel } from "./esi/esiAuth";
 import { maybeShowUpdatePopup } from "./updater/updateNotify";
+import { lookupCharacterIntel, getKillmailEnriched } from "./intel/intelService";
 
 const APP_NAME = "Rangefinder";
 
@@ -80,6 +82,7 @@ async function boot(): Promise<void> {
 
   ipcMain.on("settings:hide", () => hideSettingsWindow());
   ipcMain.on("popup:hide", () => hidePopupWindow());
+  ipcMain.on("intel:hide", () => hideIntelWindow());
 
   ipcMain.on("popup:setResultMode", (_e, on: boolean) => {
     setPopupResultMode(!!on);
@@ -96,6 +99,16 @@ async function boot(): Promise<void> {
   });
 
   ipcMain.handle("debug:ping", async () => ({ ok: true, t: Date.now() }));
+
+  ipcMain.handle("intel:lookupCharacter", async (_e, name: string) => {
+    const n = String(name || "").trim();
+    if (!n) return { ok: false, error: "Missing character name" };
+    return lookupCharacterIntel(n);
+  });
+
+  ipcMain.handle("intel:getKillmailEnriched", async (_e, killmailId: number, killmailHash: string, characterId: number) => {
+    return getKillmailEnriched(killmailId, killmailHash, characterId);
+  });
 
   ipcMain.handle("dev:getState", () => getDevState());
 

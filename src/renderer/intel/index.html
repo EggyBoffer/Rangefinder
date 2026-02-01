@@ -1,0 +1,355 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rangefinder</title>
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="./intel.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="panel">
+        <div class="top">
+          <div class="title">Rangefinder</div>
+          <div class="hint">Intel search. Enter to run. Esc to close.</div>
+        </div>
+
+        <div class="row">
+          <input id="nameIn" class="input" placeholder="Character name" autocomplete="off" />
+          <button id="btnSearch" class="btn">Search</button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div id="head" class="head" style="display:none;">
+          <div>
+            <div id="charName" class="charName">-</div>
+            <div class="charMeta" id="charMeta">-</div>
+          </div>
+          <div class="headActions">
+            <button id="btnOpen" class="btn btnSmall">Open zKill</button>
+            <button id="btnCopy" class="btn btnSmall">Copy summary</button>
+          </div>
+        </div>
+
+        <div id="list" class="list"></div>
+      </div>
+    </div>
+
+    <script>
+      const nameIn = document.getElementById("nameIn");
+      const btnSearch = document.getElementById("btnSearch");
+      const statusEl = document.getElementById("status");
+
+      const headEl = document.getElementById("head");
+      const charNameEl = document.getElementById("charName");
+      const charMetaEl = document.getElementById("charMeta");
+
+      const btnOpen = document.getElementById("btnOpen");
+      const btnCopy = document.getElementById("btnCopy");
+
+      const listEl = document.getElementById("list");
+
+      let busy = false;
+      let enrichAbortToken = 0;
+
+      function setStatus(kind, msg) {
+        statusEl.classList.remove("good", "bad");
+        if (kind) statusEl.classList.add(kind);
+        statusEl.textContent = msg || "";
+      }
+
+      function fmtISK(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return "-";
+        if (n >= 1e12) return (n / 1e12).toFixed(2) + "T";
+        if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+        if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+        if (n >= 1e3) return (n / 1e3).toFixed(2) + "K";
+        return String(Math.round(n));
+      }
+
+      function clearUI() {
+        busy = false;
+        enrichAbortToken++;
+        headEl.style.display = "none";
+        charNameEl.textContent = "-";
+        charMetaEl.textContent = "-";
+        listEl.innerHTML = "";
+        setStatus(null, "");
+        nameIn.value = "";
+        nameIn.focus();
+      }
+
+      function buildRow(entry) {
+        const row = document.createElement("div");
+        row.className = "item";
+        row.dataset.kmid = String(entry.killmailId || "");
+
+        const left = document.createElement("div");
+        left.className = "itemLeft";
+
+        const top = document.createElement("div");
+        top.className = "itemTop";
+
+        const badge = document.createElement("span");
+        badge.className = "badge " + (entry.kind === "loss" ? "bad" : "good");
+        badge.textContent = entry.kind === "loss" ? "LOSS" : "KILL";
+
+        top.appendChild(badge);
+
+        const timeTxt = String(entry.time || "").trim();
+        if (timeTxt && timeTxt !== "-") {
+          const when = document.createElement("span");
+          when.className = "when";
+          when.textContent = timeTxt;
+          top.appendChild(when);
+        }
+
+        const l1 = document.createElement("div");
+        l1.className = "line1";
+        l1.textContent = "Loading…";
+
+        const lPilot = document.createElement("div");
+        lPilot.className = "lineX";
+        lPilot.textContent = "";
+
+        const lShip = document.createElement("div");
+        lShip.className = "lineX";
+        lShip.textContent = "";
+
+        const lExtra = document.createElement("div");
+        lExtra.className = "lineX";
+        lExtra.textContent = "";
+
+        const l2 = document.createElement("div");
+        l2.className = "line2";
+
+        const sys = String(entry.systemName || "").trim();
+        const isk = entry.totalValue != null ? fmtISK(entry.totalValue) + " ISK" : "-";
+        if (sys && sys !== "-") l2.textContent = `${sys} • ${isk}`;
+        else l2.textContent = isk;
+
+        left.appendChild(top);
+        left.appendChild(l1);
+        left.appendChild(lPilot);
+        left.appendChild(lShip);
+        left.appendChild(lExtra);
+        left.appendChild(l2);
+
+        const right = document.createElement("div");
+        right.className = "itemRight";
+
+        const btn = document.createElement("button");
+        btn.className = "btn btnSmall";
+        btn.textContent = "Open";
+        btn.addEventListener("click", () => {
+          if (!entry.zkillUrl) return;
+          try { window.open(entry.zkillUrl, "_blank"); } catch {}
+        });
+
+        right.appendChild(btn);
+
+        row.appendChild(left);
+        row.appendChild(right);
+
+        row._l1 = l1;
+        row._pilot = lPilot;
+        row._ship = lShip;
+        row._extra = lExtra;
+
+        return row;
+      }
+
+      function renderList(entries) {
+        listEl.innerHTML = "";
+        const arr = Array.isArray(entries) ? entries : [];
+
+        if (!arr.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "No recent kills/losses returned.";
+          listEl.appendChild(empty);
+          return;
+        }
+
+        for (const e of arr) {
+          const row = buildRow(e);
+          listEl.appendChild(row);
+        }
+      }
+
+      function updateRow(killmailId, lines) {
+        const row = listEl.querySelector(`.item[data-kmid="${killmailId}"]`);
+        if (!row) return;
+
+        const l1 = row._l1;
+        const lp = row._pilot;
+        const ls = row._ship;
+        const le = row._extra;
+
+        if (!l1 || !lp || !ls || !le) return;
+
+        const a = Array.isArray(lines) ? lines : [];
+        const t1 = String(a[0] || "").trim();
+        const t2 = String(a[1] || "").trim();
+        const t3 = String(a[2] || "").trim();
+        const t4 = String(a[3] || "").trim();
+
+        l1.textContent = t1 || "";
+        lp.textContent = t2 || "";
+        ls.textContent = t3 || "";
+        le.textContent = t4 || "";
+
+        lp.style.display = t2 ? "block" : "none";
+        ls.style.display = t3 ? "block" : "none";
+        le.style.display = t4 ? "block" : "none";
+      }
+
+      async function hydrateEntries(res) {
+        const token = ++enrichAbortToken;
+
+        if (!window.rangefinder || typeof window.rangefinder.intelGetKillmailEnriched !== "function") {
+          return;
+        }
+
+        const entries = Array.isArray(res.entries) ? res.entries : [];
+        const characterId = Number(res.characterId);
+
+        for (let i = 0; i < entries.length; i++) {
+          if (token !== enrichAbortToken) return;
+
+          const e = entries[i];
+          const kmid = Number(e.killmailId);
+          const hash = String(e.killmailHash || "");
+
+          await new Promise((r) => setTimeout(r, 140));
+          if (token !== enrichAbortToken) return;
+
+          try {
+            const det = await window.rangefinder.intelGetKillmailEnriched(kmid, hash, characterId);
+            if (token !== enrichAbortToken) return;
+
+            if (!det || !det.ok) {
+              updateRow(kmid, ["Details unavailable"]);
+              continue;
+            }
+
+            const victimShip = det.victimShipName || "-";
+            const victimName = det.victimName || "-";
+            const yourShip = det.yourShipName || "-";
+
+            if (e.kind === "loss") {
+              const atkName = det.topAttackerName || "-";
+              const atkShip = det.topAttackerShipName || "-";
+              updateRow(kmid, [
+                `Lost: ${victimShip}`,
+                `Pilot: ${victimName}`,
+                `Ship flown: ${yourShip}`,
+                `Killed by: ${atkName} (${atkShip})`,
+              ]);
+            } else {
+              updateRow(kmid, [
+                `Killed: ${victimShip}`,
+                `Pilot: ${victimName}`,
+                `Ship flown: ${yourShip}`,
+              ]);
+            }
+          } catch {
+            updateRow(kmid, ["Details unavailable"]);
+          }
+        }
+      }
+
+      async function doSearch() {
+        if (busy) return;
+        const name = String(nameIn.value || "").trim();
+        if (!name) return;
+
+        if (!window.rangefinder || typeof window.rangefinder.intelLookupCharacter !== "function") {
+          setStatus("bad", "Intel bridge not available.");
+          return;
+        }
+
+        busy = true;
+        setStatus(null, "Searching...");
+        headEl.style.display = "none";
+        listEl.innerHTML = "";
+        enrichAbortToken++;
+
+        try {
+          const res = await window.rangefinder.intelLookupCharacter(name);
+
+          if (!res || !res.ok) {
+            const msg = (res && res.error) || "Lookup failed";
+            setStatus("bad", msg);
+            busy = false;
+            return;
+          }
+
+          setStatus("good", "Done.");
+          headEl.style.display = "flex";
+          charNameEl.textContent = res.characterName || ("Character " + res.characterId);
+
+          const bits = [];
+          if (res.corporationName) bits.push(res.corporationName);
+          if (res.allianceName) bits.push(res.allianceName);
+          bits.push("ID " + res.characterId);
+          charMetaEl.textContent = bits.filter(Boolean).join(" • ");
+
+          btnOpen.onclick = () => {
+            const url = res.zkillUrl;
+            if (!url) return;
+            try { window.open(url, "_blank"); } catch {}
+          };
+
+          btnCopy.onclick = async () => {
+            const lines = [];
+            lines.push((res.characterName || "Character") + " (" + res.characterId + ")");
+            if (res.corporationName) lines.push("Corp: " + res.corporationName);
+            if (res.allianceName) lines.push("Alliance: " + res.allianceName);
+            if (res.zkillUrl) lines.push(res.zkillUrl);
+            const n = Array.isArray(res.entries) ? res.entries.length : 0;
+            lines.push("Recent: " + n + " entries");
+            const text = lines.filter(Boolean).join("\n");
+            try {
+              await navigator.clipboard.writeText(text);
+              setStatus("good", "Copied.");
+            } catch {
+              setStatus("bad", "Copy failed.");
+            }
+          };
+
+          renderList(res.entries);
+          hydrateEntries(res);
+        } catch {
+          setStatus("bad", "Lookup failed.");
+        } finally {
+          busy = false;
+        }
+      }
+
+      btnSearch.addEventListener("click", () => doSearch());
+
+      nameIn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doSearch();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          if (window.rangefinder && typeof window.rangefinder.hideIntel === "function") {
+            window.rangefinder.hideIntel();
+          }
+        }
+      });
+
+      if (window.rangefinder && typeof window.rangefinder.onIntelReset === "function") {
+        window.rangefinder.onIntelReset(() => {
+          clearUI();
+        });
+      }
+
+      clearUI();
+    </script>
+  </body>
+</html>

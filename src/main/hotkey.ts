@@ -1,11 +1,13 @@
 import { app, globalShortcut } from "electron";
 import { loadConfig, saveConfig } from "./storage/appConfig";
 import { togglePopupWindow, hidePopupWindow } from "./windows/popupWindow";
+import { toggleIntelWindow } from "./windows/intelWindow";
 
 export type HotkeyConfig = {
   popupAuto: string;
   popupManual: string;
   hidePopup: string;
+  intelSearch: string;
 };
 
 let registered = false;
@@ -26,8 +28,9 @@ function registerFrom(cfg: HotkeyConfig): { ok: true } | { ok: false; error: str
   const popupAuto = normalizeAccelerator(cfg.popupAuto);
   const popupManual = normalizeAccelerator(cfg.popupManual);
   const hidePopupAcc = normalizeAccelerator(cfg.hidePopup);
+  const intelSearch = normalizeAccelerator(cfg.intelSearch);
 
-  if (!popupAuto || !popupManual || !hidePopupAcc) {
+  if (!popupAuto || !popupManual || !hidePopupAcc || !intelSearch) {
     return { ok: false, error: "Hotkeys cannot be blank" };
   }
 
@@ -44,6 +47,12 @@ function registerFrom(cfg: HotkeyConfig): { ok: true } | { ok: false; error: str
   if (!okH) {
     unregisterAll();
     return { ok: false, error: `Failed to register: ${hidePopupAcc}` };
+  }
+
+  const okI = globalShortcut.register(intelSearch, () => toggleIntelWindow());
+  if (!okI) {
+    unregisterAll();
+    return { ok: false, error: `Failed to register: ${intelSearch}` };
   }
 
   return { ok: true };
@@ -78,6 +87,7 @@ export function setHotkeys(next: HotkeyConfig): { ok: true } | { ok: false; erro
     popupAuto: normalizeAccelerator(next.popupAuto),
     popupManual: normalizeAccelerator(next.popupManual),
     hidePopup: normalizeAccelerator(next.hidePopup),
+    intelSearch: normalizeAccelerator(next.intelSearch),
   };
   saveConfig(cfg);
   return { ok: true };
@@ -89,6 +99,7 @@ export function resetHotkeysToDefault(): { ok: true } | { ok: false; error: stri
     popupAuto: "Control+Shift+J",
     popupManual: "Control+Shift+P",
     hidePopup: "Control+Shift+K",
+    intelSearch: "Control+Shift+I",
   };
   const res = registerFrom(defaults);
   if (!res.ok) {

@@ -8,6 +8,7 @@ export type AppConfig = {
     popupAuto: string;
     popupManual: string;
     hidePopup: string;
+    intelSearch: string;
   };
   lastUpdatePromptedVersion: string;
 };
@@ -18,6 +19,7 @@ const DEFAULT_CONFIG: AppConfig = {
     popupAuto: "Control+Shift+J",
     popupManual: "Control+Shift+P",
     hidePopup: "Control+Shift+K",
+    intelSearch: "Control+Shift+I",
   },
   lastUpdatePromptedVersion: "",
 };
@@ -40,6 +42,7 @@ export function loadConfig(): AppConfig {
         popupAuto: String((parsed as any)?.hotkeys?.popupAuto || DEFAULT_CONFIG.hotkeys.popupAuto),
         popupManual: String((parsed as any)?.hotkeys?.popupManual || DEFAULT_CONFIG.hotkeys.popupManual),
         hidePopup: String((parsed as any)?.hotkeys?.hidePopup || DEFAULT_CONFIG.hotkeys.hidePopup),
+        intelSearch: String((parsed as any)?.hotkeys?.intelSearch || DEFAULT_CONFIG.hotkeys.intelSearch),
       },
       lastUpdatePromptedVersion: String((parsed as any)?.lastUpdatePromptedVersion || ""),
     };

@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld("rangefinder", {
   hideSettings: () => ipcRenderer.send("settings:hide"),
 
   getHotkeys: () => ipcRenderer.invoke("config:getHotkeys"),
-  setHotkeys: (hotkeys: { popupAuto: string; popupManual: string; hidePopup: string }) =>
+  setHotkeys: (hotkeys: { popupAuto: string; popupManual: string; hidePopup: string; intelSearch: string }) =>
     ipcRenderer.invoke("config:setHotkeys", hotkeys),
   resetHotkeys: () => ipcRenderer.invoke("config:resetHotkeys"),
 

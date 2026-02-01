@@ -192,6 +192,12 @@
                 <button class="btn" id="capClose">Capture</button>
               </div>
 
+              <div class="row3" style="margin-top:10px; margin-bottom:0;">
+                <div class="label">Intel search</div>
+                <input class="input" id="hkIntel" spellcheck="false" autocomplete="off" />
+                <button class="btn" id="capIntel">Capture</button>
+              </div>
+
               <div class="actions">
                 <button class="btn" id="btnReset">Reset</button>
                 <button class="btn" id="btnSave">Save</button>
@@ -223,10 +229,12 @@
       const hkAuto = document.getElementById("hkAuto");
       const hkManual = document.getElementById("hkManual");
       const hkClose = document.getElementById("hkClose");
+      const hkIntel = document.getElementById("hkIntel");
 
       const capAuto = document.getElementById("capAuto");
       const capManual = document.getElementById("capManual");
       const capClose = document.getElementById("capClose");
+      const capIntel = document.getElementById("capIntel");
 
       const btnSave = document.getElementById("btnSave");
       const btnReset = document.getElementById("btnReset");
@@ -250,6 +258,7 @@
         hkAuto.classList.remove("capturing");
         hkManual.classList.remove("capturing");
         hkClose.classList.remove("capturing");
+        hkIntel.classList.remove("capturing");
       }
 
       function startCapture(input) {
@@ -278,7 +287,7 @@
         if (k === "End") return "End";
         if (k === "PageUp") return "PageUp";
         if (k === "PageDown") return "PageDown";
-        if (k.startsWith("F") && /^F\\d+$/.test(k)) return k;
+        if (k.startsWith("F") && /^F\d+$/.test(k)) return k;
         if (k.length === 1) return k.toUpperCase();
         return k;
       }
@@ -331,6 +340,7 @@
       capAuto.addEventListener("click", () => startCapture(hkAuto));
       capManual.addEventListener("click", () => startCapture(hkManual));
       capClose.addEventListener("click", () => startCapture(hkClose));
+      capIntel.addEventListener("click", () => startCapture(hkIntel));
 
       btnSave.addEventListener("click", async () => {
         if (!window.rangefinder || typeof window.rangefinder.setHotkeys !== "function") return;
@@ -339,6 +349,7 @@
           popupAuto: String(hkAuto.value || "").trim(),
           popupManual: String(hkManual.value || "").trim(),
           hidePopup: String(hkClose.value || "").trim(),
+          intelSearch: String(hkIntel.value || "").trim(),
         };
 
         const res = await window.rangefinder.setHotkeys(payload);
@@ -364,6 +375,7 @@
         hkAuto.value = hk.popupAuto || "";
         hkManual.value = hk.popupManual || "";
         hkClose.value = hk.hidePopup || "";
+        hkIntel.value = hk.intelSearch || "";
       }
 
       function renderCharacters(store) {
@@ -419,27 +431,27 @@
         }
       }
 
-      async function loadCharacters() {
-        if (!window.rangefinder || typeof window.rangefinder.esiListCharacters !== "function") return;
+      btnAddChar.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.esiAddCharacter !== "function") return;
+        setStatus(esiStatus, null, "");
+        setStatus(esiStatus, null, "Opening login...");
+        const res = await window.rangefinder.esiAddCharacter();
+        if (!res || !res.ok) {
+          setStatus(esiStatus, "bad", (res && res.error) || "Login failed");
+          return;
+        }
+        setStatus(esiStatus, "good", "Character added.");
+        const store = await window.rangefinder.esiListCharacters();
+        renderCharacters(store);
+      });
+
+      async function boot() {
+        await loadHotkeys();
         const store = await window.rangefinder.esiListCharacters();
         renderCharacters(store);
       }
 
-      btnAddChar.addEventListener("click", async () => {
-        if (!window.rangefinder || typeof window.rangefinder.esiAddCharacter !== "function") return;
-        setStatus(esiStatus, null, "");
-        const res = await window.rangefinder.esiAddCharacter();
-        if (!res || !res.ok) {
-          setStatus(esiStatus, "bad", (res && res.error) || "Failed to add character.");
-          return;
-        }
-        const store = res.store;
-        renderCharacters(store);
-        setStatus(esiStatus, "good", "Character added.");
-      });
-
-      loadHotkeys();
-      loadCharacters();
+      boot();
     </script>
   </body>
 </html>

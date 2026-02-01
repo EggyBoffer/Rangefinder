@@ -5,8 +5,8 @@ declare global {
     rangefinder?: {
       hideSettings?: () => void;
 
-      getHotkeys?: () => Promise<{ popupAuto: string; popupManual: string; hidePopup: string }>;
-      setHotkeys?: (hotkeys: { popupAuto: string; popupManual: string; hidePopup: string }) => Promise<
+      getHotkeys?: () => Promise<{ popupAuto: string; popupManual: string; hidePopup: string; intelSearch: string }>;
+      setHotkeys?: (hotkeys: { popupAuto: string; popupManual: string; hidePopup: string; intelSearch: string }) => Promise<
         { ok: true } | { ok: false; error: string }
       >;
       resetHotkeys?: () => Promise<{ ok: true } | { ok: false; error: string }>;

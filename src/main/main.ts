@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell, clipboard } from "electron";
 import { createTray } from "./tray";
 import { getHotkeys, registerHotkeys, resetHotkeysToDefault, setHotkeys, type HotkeyConfig } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
@@ -84,6 +84,29 @@ async function boot(): Promise<void> {
   ipcMain.on("popup:hide", () => hidePopupWindow());
   ipcMain.on("intel:hide", () => hideIntelWindow());
 
+  ipcMain.handle("shell:openExternal", async (_e, url: string) => {
+    const u = String(url || "").trim();
+    if (!u) return { ok: false, error: "Missing URL" };
+    try {
+      await shell.openExternal(u);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: String(err?.message || "Failed to open link") };
+    }
+  });
+
+  // ✅ Reliable clipboard for overlay windows
+  ipcMain.handle("clipboard:writeText", async (_e, text: string) => {
+    const t = String(text ?? "");
+    if (!t) return { ok: false, error: "Missing text" };
+    try {
+      clipboard.writeText(t);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: String(err?.message || "Clipboard write failed") };
+    }
+  });
+
   ipcMain.on("popup:setResultMode", (_e, on: boolean) => {
     setPopupResultMode(!!on);
   });
@@ -106,9 +129,12 @@ async function boot(): Promise<void> {
     return lookupCharacterIntel(n);
   });
 
-  ipcMain.handle("intel:getKillmailEnriched", async (_e, killmailId: number, killmailHash: string, characterId: number) => {
-    return getKillmailEnriched(killmailId, killmailHash, characterId);
-  });
+  ipcMain.handle(
+    "intel:getKillmailEnriched",
+    async (_e, killmailId: number, killmailHash: string, characterId: number) => {
+      return getKillmailEnriched(killmailId, killmailHash, characterId);
+    }
+  );
 
   ipcMain.handle("dev:getState", () => getDevState());
 

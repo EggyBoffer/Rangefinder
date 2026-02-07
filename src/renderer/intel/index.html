@@ -81,6 +81,34 @@
         nameIn.focus();
       }
 
+      function openExternal(url) {
+        const u = String(url || "").trim();
+        if (!u) return;
+        if (window.rangefinder && typeof window.rangefinder.openExternal === "function") {
+          window.rangefinder.openExternal(u);
+          return;
+        }
+      }
+
+      async function copyText(text) {
+        const t = String(text || "");
+        if (!t) return false;
+
+        // Prefer main-process clipboard (reliable in Electron overlays)
+        if (window.rangefinder && typeof window.rangefinder.writeClipboardText === "function") {
+          const r = await window.rangefinder.writeClipboardText(t);
+          return !!(r && r.ok);
+        }
+
+        // Fallback (can fail in Electron depending on permissions)
+        try {
+          await navigator.clipboard.writeText(t);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
       function buildRow(entry) {
         const row = document.createElement("div");
         row.className = "item";
@@ -145,7 +173,7 @@
         btn.textContent = "Open";
         btn.addEventListener("click", () => {
           if (!entry.zkillUrl) return;
-          try { window.open(entry.zkillUrl, "_blank"); } catch {}
+          openExternal(entry.zkillUrl);
         });
 
         right.appendChild(btn);
@@ -298,9 +326,7 @@
           charMetaEl.textContent = bits.filter(Boolean).join(" • ");
 
           btnOpen.onclick = () => {
-            const url = res.zkillUrl;
-            if (!url) return;
-            try { window.open(url, "_blank"); } catch {}
+            if (res.zkillUrl) openExternal(res.zkillUrl);
           };
 
           btnCopy.onclick = async () => {
@@ -312,12 +338,9 @@
             const n = Array.isArray(res.entries) ? res.entries.length : 0;
             lines.push("Recent: " + n + " entries");
             const text = lines.filter(Boolean).join("\n");
-            try {
-              await navigator.clipboard.writeText(text);
-              setStatus("good", "Copied.");
-            } catch {
-              setStatus("bad", "Copy failed.");
-            }
+
+            const ok = await copyText(text);
+            setStatus(ok ? "good" : "bad", ok ? "Copied." : "Copy failed.");
           };
 
           renderList(res.entries);

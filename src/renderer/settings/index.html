@@ -207,6 +207,19 @@
             </div>
 
             <div class="section">
+              <div class="section-title">Planner</div>
+              <div class="section-desc">If destination is out of range, check nearby gate systems to see if a short gate move avoids the first mid.</div>
+
+              <div class="row3" style="margin-bottom:0;">
+                <div class="label">Max gate jumps to check</div>
+                <input class="input" id="maxGateJumps" inputmode="numeric" />
+                <button class="btn" id="btnSavePlanner">Save</button>
+              </div>
+
+              <div class="status" id="plannerStatus"></div>
+            </div>
+
+            <div class="section">
               <div class="section-title">Characters</div>
               <div class="section-desc">Add and remove characters. No setup required.</div>
 
@@ -240,6 +253,10 @@
       const btnReset = document.getElementById("btnReset");
 
       const hkStatus = document.getElementById("hkStatus");
+
+      const maxGateJumps = document.getElementById("maxGateJumps");
+      const btnSavePlanner = document.getElementById("btnSavePlanner");
+      const plannerStatus = document.getElementById("plannerStatus");
 
       const btnAddChar = document.getElementById("btnAddChar");
       const esiStatus = document.getElementById("esiStatus");
@@ -368,6 +385,29 @@
         }
       });
 
+      btnSavePlanner.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.setMaxGateJumpsToCheck !== "function") return;
+        setStatus(plannerStatus, null, "");
+        const raw = String(maxGateJumps.value || "").trim();
+        const n = Number(raw);
+        const v = Number.isFinite(n) ? Math.max(0, Math.min(10, Math.floor(n))) : 0;
+        const res = await window.rangefinder.setMaxGateJumpsToCheck(v);
+        if (res && res.ok) {
+          maxGateJumps.value = String(res.value);
+          setStatus(plannerStatus, "good", "Saved.");
+        } else {
+          setStatus(plannerStatus, "bad", (res && res.error) || "Failed to save");
+        }
+      });
+
+      async function loadPlanner() {
+        if (!window.rangefinder || typeof window.rangefinder.getMaxGateJumpsToCheck !== "function") return;
+        const v = await window.rangefinder.getMaxGateJumpsToCheck();
+        if (typeof v === "number" && Number.isFinite(v)) {
+          maxGateJumps.value = String(Math.max(0, Math.min(10, Math.floor(v))));
+        }
+      }
+
       async function loadHotkeys() {
         if (!window.rangefinder || typeof window.rangefinder.getHotkeys !== "function") return;
         const hk = await window.rangefinder.getHotkeys();
@@ -380,10 +420,10 @@
 
       function renderCharacters(store) {
         charList.innerHTML = "";
-        const chars = Array.isArray(store?.characters) ? store.characters : [];
-        const activeId = store?.activeCharacterId ?? null;
+        const chars = (store && store.characters) || [];
+        const activeId = store && store.activeCharacterId ? store.activeCharacterId : null;
 
-        if (!chars.length) {
+        if (!Array.isArray(chars) || chars.length === 0) {
           const empty = document.createElement("div");
           empty.className = "charMeta";
           empty.textContent = "No characters added yet.";
@@ -447,6 +487,7 @@
 
       async function boot() {
         await loadHotkeys();
+        await loadPlanner();
         const store = await window.rangefinder.esiListCharacters();
         renderCharacters(store);
       }

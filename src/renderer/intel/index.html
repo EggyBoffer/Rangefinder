@@ -9,49 +9,108 @@
   <body>
     <div class="wrap">
       <div class="panel">
-        <div class="top">
+        <div class="top drag">
           <div class="title">Rangefinder</div>
           <div class="hint">Intel search. Enter to run. Esc to close.</div>
         </div>
 
-        <div class="row">
+        <div class="row noDrag">
           <input id="nameIn" class="input" placeholder="Character name" autocomplete="off" />
           <button id="btnSearch" class="btn">Search</button>
         </div>
 
         <div id="status" class="status"></div>
 
-        <div id="head" class="head" style="display:none;">
-          <div>
-            <div id="charName" class="charName">-</div>
+        <div id="history" class="history noDrag" style="display:none;">
+          <div class="historyTop">
+            <div class="historyTitle">Recent</div>
+            <button id="btnClearHistory" class="btn btnSmall btnGhost">Clear</button>
+          </div>
+          <div id="historyList" class="historyList"></div>
+        </div>
+
+        <div id="head" class="head drag" style="display:none;">
+          <div class="headLeft">
+            <div class="charNameRow">
+              <div id="charName" class="charName">-</div>
+
+              <img
+                id="cynoIcon"
+                class="roleIconImg noDrag"
+                src="../assets/cyno.png"
+                alt="Cyno activity"
+                style="display:none;"
+              />
+
+              <img
+                id="blopsIcon"
+                class="roleIconImg noDrag"
+                src="../assets/redeemer.png"
+                alt="BLOPS activity"
+                style="display:none;"
+              />
+            </div>
+
             <div class="charMeta" id="charMeta">-</div>
           </div>
-          <div class="headActions">
+
+          <div class="headActions noDrag">
             <button id="btnOpen" class="btn btnSmall">Open zKill</button>
             <button id="btnCopy" class="btn btnSmall">Copy summary</button>
           </div>
         </div>
 
-        <div id="list" class="list"></div>
+        <div id="list" class="list noDrag"></div>
       </div>
     </div>
+
+    <div id="rfTip" class="rfTip" style="display:none;"></div>
 
     <script>
       const nameIn = document.getElementById("nameIn");
       const btnSearch = document.getElementById("btnSearch");
       const statusEl = document.getElementById("status");
 
+      const historyEl = document.getElementById("history");
+      const historyListEl = document.getElementById("historyList");
+      const btnClearHistory = document.getElementById("btnClearHistory");
+
       const headEl = document.getElementById("head");
       const charNameEl = document.getElementById("charName");
       const charMetaEl = document.getElementById("charMeta");
 
+      const cynoIconEl = document.getElementById("cynoIcon");
+      const blopsIconEl = document.getElementById("blopsIcon");
+
       const btnOpen = document.getElementById("btnOpen");
       const btnCopy = document.getElementById("btnCopy");
-
       const listEl = document.getElementById("list");
+
+      const tipEl = document.getElementById("rfTip");
 
       let busy = false;
       let enrichAbortToken = 0;
+
+      let enrichedTotal = 0;
+      let cynoHits = 0;
+      let blopsHits = 0;
+
+      const HISTORY_KEY = "rf_intel_history_v1";
+      const HISTORY_LIMIT = 3;
+
+      function safeString(v) {
+        return String(v ?? "").trim();
+      }
+
+      function hideIfBroken(imgEl) {
+        if (!imgEl) return;
+        imgEl.addEventListener("error", () => {
+          imgEl.style.display = "none";
+        });
+      }
+
+      hideIfBroken(cynoIconEl);
+      hideIfBroken(blopsIconEl);
 
       function setStatus(kind, msg) {
         statusEl.classList.remove("good", "bad");
@@ -69,16 +128,277 @@
         return String(Math.round(n));
       }
 
+      const CYNO_SHIPS = new Set(["arazu", "pilgrim", "rapier", "falcon"]);
+      const BLOPS_SHIPS = new Set(["widow", "redeemer", "sin", "marshal", "panther", "python"]);
+
+      function normalizeShipName(name) {
+        const s = String(name || "").trim().toLowerCase();
+        if (!s) return "";
+        return s.replace(/\s+/g, " ").trim();
+      }
+
+      function isCynoShip(name) {
+        const s = normalizeShipName(name);
+        if (!s) return false;
+        return CYNO_SHIPS.has(s);
+      }
+
+      function isBlopsShip(name) {
+        const s = normalizeShipName(name);
+        if (!s) return false;
+        return BLOPS_SHIPS.has(s);
+      }
+
+      function shouldShowRole(total, hits) {
+        if (total <= 0) return false;
+        const pct = hits / total;
+        if (total >= 8 && pct >= 0.35) return true;
+        if (total >= 6 && hits >= 3) return true;
+        return false;
+      }
+
+      function hideTip() {
+        if (!tipEl) return;
+        tipEl.style.display = "none";
+        tipEl.classList.remove("show");
+        tipEl.textContent = "";
+      }
+
+      function showTip(text, x, y) {
+        if (!tipEl) return;
+        tipEl.textContent = String(text || "");
+        tipEl.style.display = "block";
+
+        const pad = 14;
+        const vw = window.innerWidth || 0;
+        const vh = window.innerHeight || 0;
+
+        tipEl.style.left = "0px";
+        tipEl.style.top = "0px";
+
+        const w = tipEl.offsetWidth || 0;
+        const h = tipEl.offsetHeight || 0;
+
+        let left = x + 12;
+        let top = y + 14;
+
+        if (left + w + pad > vw) left = Math.max(pad, x - w - 12);
+        if (top + h + pad > vh) top = Math.max(pad, y - h - 12);
+
+        tipEl.style.left = left + "px";
+        tipEl.style.top = top + "px";
+        tipEl.classList.add("show");
+      }
+
+      function attachPrettyTip(el) {
+        if (!el) return;
+
+        el.addEventListener("mouseenter", (e) => {
+          const t = el.dataset.tip;
+          if (!t) return;
+          showTip(t, e.clientX, e.clientY);
+        });
+
+        el.addEventListener("mousemove", (e) => {
+          const t = el.dataset.tip;
+          if (!t) return;
+          showTip(t, e.clientX, e.clientY);
+        });
+
+        el.addEventListener("mouseleave", () => hideTip());
+        el.addEventListener("blur", () => hideTip());
+        el.addEventListener("mousedown", () => hideTip());
+      }
+
+      attachPrettyTip(cynoIconEl);
+      attachPrettyTip(blopsIconEl);
+
+      function updateRoleIndicators() {
+        hideTip();
+
+        if (enrichedTotal <= 0) {
+          if (cynoIconEl) {
+            cynoIconEl.style.display = "none";
+            cynoIconEl.dataset.tip = "";
+          }
+          if (blopsIconEl) {
+            blopsIconEl.style.display = "none";
+            blopsIconEl.dataset.tip = "";
+          }
+          return;
+        }
+
+        const cynoShow = shouldShowRole(enrichedTotal, cynoHits);
+        const blopsShow = shouldShowRole(enrichedTotal, blopsHits);
+
+        if (cynoIconEl) {
+          if (cynoShow) {
+            cynoIconEl.style.display = "inline-flex";
+            cynoIconEl.dataset.tip = `${cynoHits}/${enrichedTotal} kills in cyno ships`;
+          } else {
+            cynoIconEl.style.display = "none";
+            cynoIconEl.dataset.tip = "";
+          }
+        }
+
+        if (blopsIconEl) {
+          if (blopsShow) {
+            blopsIconEl.style.display = "inline-flex";
+            blopsIconEl.dataset.tip = `${blopsHits}/${enrichedTotal} kills in BLOPS`;
+          } else {
+            blopsIconEl.style.display = "none";
+            blopsIconEl.dataset.tip = "";
+          }
+        }
+      }
+
+      function readHistory() {
+        try {
+          const raw = localStorage.getItem(HISTORY_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr)) return [];
+          return arr
+            .map((x) => ({
+              name: safeString(x?.name),
+              characterId: Number(x?.characterId) || 0,
+              corp: safeString(x?.corp),
+              alliance: safeString(x?.alliance),
+              ts: Number(x?.ts) || 0,
+            }))
+            .filter((x) => x.name && x.characterId > 0)
+            .slice(0, HISTORY_LIMIT);
+        } catch {
+          return [];
+        }
+      }
+
+      function writeHistory(items) {
+        const arr = Array.isArray(items) ? items.slice(0, HISTORY_LIMIT) : [];
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+        } catch {}
+      }
+
+      function setHistoryVisible(visible) {
+        if (!historyEl) return;
+        historyEl.style.display = visible ? "block" : "none";
+      }
+
+      function renderHistory() {
+        const items = readHistory();
+
+        if (!historyEl || !historyListEl) return;
+
+        if (!items.length) {
+          setHistoryVisible(false);
+          historyListEl.innerHTML = "";
+          return;
+        }
+
+        setHistoryVisible(true);
+        historyListEl.innerHTML = "";
+
+        for (const it of items) {
+          const row = document.createElement("div");
+          row.className = "hItem";
+
+          const left = document.createElement("div");
+          left.className = "hLeft";
+
+          const nm = document.createElement("div");
+          nm.className = "hName";
+          nm.textContent = it.name;
+
+          const metaBits = [];
+          if (it.corp) metaBits.push(it.corp);
+          if (it.alliance) metaBits.push(it.alliance);
+          const meta = document.createElement("div");
+          meta.className = "hMeta";
+          meta.textContent = metaBits.length ? metaBits.join(" • ") : `ID ${it.characterId}`;
+
+          left.appendChild(nm);
+          left.appendChild(meta);
+
+          const actions = document.createElement("div");
+          actions.className = "hActions";
+
+          const btn = document.createElement("button");
+          btn.className = "btn btnSmall";
+          btn.textContent = "Search again";
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            nameIn.value = it.name;
+            doSearch();
+          });
+
+          actions.appendChild(btn);
+
+          row.appendChild(left);
+          row.appendChild(actions);
+
+          row.addEventListener("click", () => {
+            nameIn.value = it.name;
+            doSearch();
+          });
+
+          historyListEl.appendChild(row);
+        }
+      }
+
+      function addToHistory(res) {
+        if (!res || !res.ok) return;
+
+        const item = {
+          name: safeString(res.characterName) || `Character ${res.characterId}`,
+          characterId: Number(res.characterId) || 0,
+          corp: safeString(res.corporationName),
+          alliance: safeString(res.allianceName),
+          ts: Date.now(),
+        };
+
+        if (!item.name || item.characterId <= 0) return;
+
+        const current = readHistory();
+        const next = [item, ...current.filter((x) => x.characterId !== item.characterId)];
+        writeHistory(next);
+        renderHistory();
+      }
+
+      if (btnClearHistory) {
+        btnClearHistory.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          writeHistory([]);
+          renderHistory();
+        });
+      }
+
+      function applyScreenMode() {
+        const hasResults = headEl && headEl.style.display !== "none";
+        if (hasResults) setHistoryVisible(false);
+        else renderHistory();
+      }
+
       function clearUI() {
         busy = false;
         enrichAbortToken++;
         headEl.style.display = "none";
         charNameEl.textContent = "-";
         charMetaEl.textContent = "-";
+
+        enrichedTotal = 0;
+        cynoHits = 0;
+        blopsHits = 0;
+        updateRoleIndicators();
+
         listEl.innerHTML = "";
         setStatus(null, "");
         nameIn.value = "";
         nameIn.focus();
+
+        applyScreenMode();
       }
 
       function openExternal(url) {
@@ -86,7 +406,6 @@
         if (!u) return;
         if (window.rangefinder && typeof window.rangefinder.openExternal === "function") {
           window.rangefinder.openExternal(u);
-          return;
         }
       }
 
@@ -94,13 +413,11 @@
         const t = String(text || "");
         if (!t) return false;
 
-        // Prefer main-process clipboard (reliable in Electron overlays)
         if (window.rangefinder && typeof window.rangefinder.writeClipboardText === "function") {
           const r = await window.rangefinder.writeClipboardText(t);
           return !!(r && r.ok);
         }
 
-        // Fallback (can fail in Electron depending on permissions)
         try {
           await navigator.clipboard.writeText(t);
           return true;
@@ -267,6 +584,11 @@
             const victimName = det.victimName || "-";
             const yourShip = det.yourShipName || "-";
 
+            enrichedTotal++;
+            if (isCynoShip(yourShip)) cynoHits++;
+            if (isBlopsShip(yourShip)) blopsHits++;
+            updateRoleIndicators();
+
             if (e.kind === "loss") {
               const atkName = det.topAttackerName || "-";
               const atkShip = det.topAttackerShipName || "-";
@@ -305,6 +627,8 @@
         listEl.innerHTML = "";
         enrichAbortToken++;
 
+        applyScreenMode();
+
         try {
           const res = await window.rangefinder.intelLookupCharacter(name);
 
@@ -312,12 +636,22 @@
             const msg = (res && res.error) || "Lookup failed";
             setStatus("bad", msg);
             busy = false;
+            applyScreenMode();
             return;
           }
 
+          addToHistory(res);
+
           setStatus("good", "Done.");
-          headEl.style.display = "flex";
+          headEl.style.display = "grid";
+          applyScreenMode();
+
           charNameEl.textContent = res.characterName || ("Character " + res.characterId);
+
+          enrichedTotal = 0;
+          cynoHits = 0;
+          blopsHits = 0;
+          updateRoleIndicators();
 
           const bits = [];
           if (res.corporationName) bits.push(res.corporationName);
@@ -347,6 +681,7 @@
           hydrateEntries(res);
         } catch {
           setStatus("bad", "Lookup failed.");
+          applyScreenMode();
         } finally {
           busy = false;
         }
@@ -372,6 +707,7 @@
         });
       }
 
+      renderHistory();
       clearUI();
     </script>
   </body>

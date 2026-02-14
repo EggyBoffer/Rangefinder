@@ -56,6 +56,7 @@
           <div class="rline"><span>Max range</span><span id="maxOut">-</span></div>
           <div class="rline"><span>Midpoints</span><span id="midOut">-</span></div>
           <div class="rline"><span>Route</span><span id="routeOut">-</span></div>
+          <div class="rline" id="gateLine" style="display:none;"><span>Gate tip</span><span id="gateOut">-</span></div>
         </div>
 
         <div></div>
@@ -86,6 +87,8 @@
       const maxOutEl = document.getElementById("maxOut");
       const midOutEl = document.getElementById("midOut");
       const routeOutEl = document.getElementById("routeOut");
+      const gateLineEl = document.getElementById("gateLine");
+      const gateOutEl = document.getElementById("gateOut");
 
       const suggestBox = document.createElement("div");
       suggestBox.className = "suggestBox";
@@ -315,6 +318,9 @@
         midOutEl.textContent = "-";
         routeOutEl.textContent = "-";
 
+        gateOutEl.textContent = "-";
+        gateLineEl.style.display = "none";
+
         inRangeEl.textContent = "IN RANGE";
         inRangeEl.classList.add("good");
         inRangeEl.classList.remove("bad");
@@ -369,6 +375,28 @@
         inRangeEl.textContent = ok ? "IN RANGE" : "OUT OF RANGE";
         inRangeEl.classList.toggle("good", ok);
         inRangeEl.classList.toggle("bad", !ok);
+
+        if (!ok) {
+          if (res && res.gateAvoidFirstMid && res.gateAvoidFirstMid.systemName) {
+            const j = Number(res.gateAvoidFirstMid.gateJumps);
+            const jumps = Number.isFinite(j) ? Math.max(1, Math.floor(j)) : 1;
+            gateOutEl.textContent = `Gate to ${res.gateAvoidFirstMid.systemName} (${jumps} jump${jumps === 1 ? "" : "s"}) to avoid first mid`;
+            gateLineEl.style.display = "";
+          } else if (res && res.gateAvoidMessage) {
+            gateOutEl.textContent = String(res.gateAvoidMessage);
+            gateLineEl.style.display = "";
+          } else if (res && typeof res.gateAvoidLimit === "number") {
+            const lim = Math.max(0, Math.floor(res.gateAvoidLimit));
+            gateOutEl.textContent = lim > 0 ? `No gate-to option within ${lim} jump${lim === 1 ? "" : "s"}` : "Gate check disabled";
+            gateLineEl.style.display = "";
+          } else {
+            gateOutEl.textContent = "No gate-to option found";
+            gateLineEl.style.display = "";
+          }
+        } else {
+          gateOutEl.textContent = "-";
+          gateLineEl.style.display = "none";
+        }
       }
 
       async function run() {

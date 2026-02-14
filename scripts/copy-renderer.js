@@ -35,6 +35,13 @@ function main() {
 
   rmDir(distRenderer);
   copyDir(srcRenderer, distRenderer);
+
+  const rootAssets = path.join(root, "assets");
+  const distAssets = path.join(distRenderer, "assets");
+  if (fs.existsSync(rootAssets)) {
+    copyDir(rootAssets, distAssets);
+  }
+
   console.log("Copied src/renderer -> dist/renderer");
 }
 

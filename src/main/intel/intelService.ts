@@ -48,7 +48,7 @@ const nameCache = new Map<string, { characterId: number; ts: number; name: strin
 const intelCache = new Map<number, { result: IntelResult; ts: number }>();
 const metaCache = new Map<number, { corporationName: string | null; allianceName: string | null; ts: number }>();
 
-const killmailCache = new Map<number, { result: KillmailEnriched | { ok: false; error: string }; ts: number }>();
+const killmailCache = new Map<string, { result: KillmailEnriched | { ok: false; error: string }; ts: number }>();
 const idNameCache = new Map<number, { name: string; ts: number }>();
 const typeNameCache = new Map<number, { name: string; ts: number }>();
 
@@ -494,7 +494,9 @@ export async function getKillmailEnriched(
   if (!Number.isFinite(kmid) || kmid <= 0 || !hash) return { ok: false, error: "Missing killmail details" };
   if (!Number.isFinite(cid) || cid <= 0) return { ok: false, error: "Missing character id" };
 
-  const cached = killmailCache.get(kmid);
+  const cacheKey = `${kmid}:${cid}`;
+
+  const cached = killmailCache.get(cacheKey);
   if (cached && nowMs() - cached.ts < KILLMAIL_TTL_MS) return cached.result;
 
   try {
@@ -542,12 +544,12 @@ export async function getKillmailEnriched(
       topAttackerShipName,
     };
 
-    killmailCache.set(kmid, { result, ts: nowMs() });
+    killmailCache.set(cacheKey, { result, ts: nowMs() });
     return result;
   } catch (err: any) {
     const msg = safeString(err?.message) || "ESI killmail lookup failed";
     const result = { ok: false as const, error: msg };
-    killmailCache.set(kmid, { result, ts: nowMs() });
+    killmailCache.set(cacheKey, { result, ts: nowMs() });
     return result;
   }
 }

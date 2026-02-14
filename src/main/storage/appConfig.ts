@@ -10,6 +10,9 @@ export type AppConfig = {
     hidePopup: string;
     intelSearch: string;
   };
+  planner: {
+    maxGateJumpsToCheck: number;
+  };
   lastUpdatePromptedVersion: string;
 };
 
@@ -21,11 +24,21 @@ const DEFAULT_CONFIG: AppConfig = {
     hidePopup: "Control+Shift+K",
     intelSearch: "Control+Shift+I",
   },
+  planner: {
+    maxGateJumpsToCheck: 3,
+  },
   lastUpdatePromptedVersion: "",
 };
 
 function getConfigPath(): string {
   return path.join(app.getPath("userData"), "config.json");
+}
+
+function clampInt(n: any, min: number, max: number, fallback: number): number {
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  const i = Math.floor(v);
+  return Math.max(min, Math.min(max, i));
 }
 
 export function loadConfig(): AppConfig {
@@ -37,12 +50,20 @@ export function loadConfig(): AppConfig {
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
 
     return {
-      hasLaunchedBefore: Boolean(parsed.hasLaunchedBefore),
+      hasLaunchedBefore: Boolean((parsed as any)?.hasLaunchedBefore),
       hotkeys: {
         popupAuto: String((parsed as any)?.hotkeys?.popupAuto || DEFAULT_CONFIG.hotkeys.popupAuto),
         popupManual: String((parsed as any)?.hotkeys?.popupManual || DEFAULT_CONFIG.hotkeys.popupManual),
         hidePopup: String((parsed as any)?.hotkeys?.hidePopup || DEFAULT_CONFIG.hotkeys.hidePopup),
         intelSearch: String((parsed as any)?.hotkeys?.intelSearch || DEFAULT_CONFIG.hotkeys.intelSearch),
+      },
+      planner: {
+        maxGateJumpsToCheck: clampInt(
+          (parsed as any)?.planner?.maxGateJumpsToCheck,
+          0,
+          10,
+          DEFAULT_CONFIG.planner.maxGateJumpsToCheck
+        ),
       },
       lastUpdatePromptedVersion: String((parsed as any)?.lastUpdatePromptedVersion || ""),
     };

@@ -1,6 +1,6 @@
 {
   "name": "rangefinder",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "Rangefinder (EVE Online jump planner)",
   "main": "dist/main/main.js",
   "type": "commonjs",

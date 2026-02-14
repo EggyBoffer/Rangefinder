@@ -11,6 +11,9 @@ declare global {
       >;
       resetHotkeys?: () => Promise<{ ok: true } | { ok: false; error: string }>;
 
+      getMaxGateJumpsToCheck?: () => Promise<number>;
+      setMaxGateJumpsToCheck?: (v: number) => Promise<{ ok: true; value: number } | { ok: false; error: string }>;
+
       esiListCharacters?: () => Promise<{
         characters: {
           characterId: number;

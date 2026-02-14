@@ -19,6 +19,7 @@ import {
 } from "./jump/jumpRange";
 import { findRouteESI } from "./planner/routePlanner";
 import { fetchSystemRegionName, fetchSystemSecurityStatus } from "./universe/esiPublic";
+import { getGateNeighbors } from "./universe/universeJumps";
 import {
   loadEsiStore,
   removeCharacter as esiRemoveCharacter,
@@ -45,6 +46,63 @@ function secToOneDecimalTrunc(sec: number): number {
 function isCynoAllowed(sec: number | null): boolean {
   if (typeof sec !== "number" || !Number.isFinite(sec)) return false;
   return secToOneDecimalTrunc(sec) <= 0.4;
+}
+
+type GateAvoidSuggestion = {
+  systemName: string;
+  gateJumps: number;
+};
+
+function pickSystemSec(s: { security: number; secStatus: number | null }): number | null {
+  const v = typeof s.secStatus === "number" && Number.isFinite(s.secStatus) ? s.secStatus : s.security;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function findGateAvoidFirstMid(fromId: number, toId: number, maxLy: number, maxGateJumps: number): GateAvoidSuggestion | null {
+  const to = getSystemById(toId);
+  if (!to) return null;
+
+  const maxDepth = Math.max(0, Math.min(25, Math.floor(maxGateJumps)));
+  if (maxDepth <= 0) return null;
+
+  const seen = new Set<number>([fromId]);
+  const q: Array<{ id: number; depth: number }> = [{ id: fromId, depth: 0 }];
+
+  let best: { id: number; depth: number; distLy: number; name: string } | null = null;
+
+  while (q.length) {
+    const cur = q.shift()!;
+    if (cur.depth >= maxDepth) continue;
+
+    const neighbors = getGateNeighbors(cur.id);
+    for (const nId of neighbors) {
+      if (seen.has(nId)) continue;
+      const nextDepth = cur.depth + 1;
+      seen.add(nId);
+
+      const cand = getSystemById(nId);
+      if (cand) {
+        const sec = pickSystemSec(cand);
+        if (sec !== null && secToOneDecimalTrunc(sec) <= 0.4) {
+          const dly = calcLightyears(cand.x, cand.y, cand.z, to.x, to.y, to.z);
+          if (dly <= maxLy) {
+            const name = String(cand.name || "").trim();
+            const rec = { id: nId, depth: nextDepth, distLy: dly, name: name || String(nId) };
+            if (!best) best = rec;
+            else if (rec.depth < best.depth) best = rec;
+            else if (rec.depth === best.depth && rec.distLy < best.distLy) best = rec;
+            else if (rec.depth === best.depth && Math.abs(rec.distLy - best.distLy) < 0.0001 && rec.name < best.name)
+              best = rec;
+          }
+        }
+      }
+
+      q.push({ id: nId, depth: nextDepth });
+    }
+  }
+
+  if (!best) return null;
+  return { systemName: best.name, gateJumps: best.depth };
 }
 
 async function isForbiddenSystem(systemId: number): Promise<boolean> {
@@ -91,13 +149,12 @@ async function boot(): Promise<void> {
       await shell.openExternal(u);
       return { ok: true };
     } catch (err: any) {
-      return { ok: false, error: String(err?.message || "Failed to open link") };
+      return { ok: false, error: String(err?.message || "Failed to open") };
     }
   });
 
-  // ✅ Reliable clipboard for overlay windows
   ipcMain.handle("clipboard:writeText", async (_e, text: string) => {
-    const t = String(text ?? "");
+    const t = String(text || "");
     if (!t) return { ok: false, error: "Missing text" };
     try {
       clipboard.writeText(t);
@@ -121,6 +178,20 @@ async function boot(): Promise<void> {
     return resetHotkeysToDefault();
   });
 
+  ipcMain.handle("config:getMaxGateJumpsToCheck", async () => {
+    const cfg = loadConfig();
+    return cfg.planner.maxGateJumpsToCheck;
+  });
+
+  ipcMain.handle("config:setMaxGateJumpsToCheck", async (_e, v: number) => {
+    const cfg = loadConfig();
+    const n = typeof v === "number" ? v : Number(v);
+    const i = Number.isFinite(n) ? Math.max(0, Math.min(10, Math.floor(n))) : cfg.planner.maxGateJumpsToCheck;
+    cfg.planner.maxGateJumpsToCheck = i;
+    saveConfig(cfg);
+    return { ok: true, value: i } as const;
+  });
+
   ipcMain.handle("debug:ping", async () => ({ ok: true, t: Date.now() }));
 
   ipcMain.handle("intel:lookupCharacter", async (_e, name: string) => {
@@ -129,12 +200,9 @@ async function boot(): Promise<void> {
     return lookupCharacterIntel(n);
   });
 
-  ipcMain.handle(
-    "intel:getKillmailEnriched",
-    async (_e, killmailId: number, killmailHash: string, characterId: number) => {
-      return getKillmailEnriched(killmailId, killmailHash, characterId);
-    }
-  );
+  ipcMain.handle("intel:getKillmailEnriched", async (_e, killmailId: number, killmailHash: string, characterId: number) => {
+    return getKillmailEnriched(killmailId, killmailHash, characterId);
+  });
 
   ipcMain.handle("dev:getState", () => getDevState());
 
@@ -152,13 +220,11 @@ async function boot(): Promise<void> {
 
   ipcMain.handle("esi:addCharacter", async () => {
     const res = await startAddCharacter();
-    if (!res.ok) return { ok: false, error: res.error || "Login failed" };
-    return { ok: true, store: loadEsiStore() };
+    return res;
   });
 
-  ipcMain.handle("esi:removeCharacter", async (_e, id: number) => {
-    const s = esiRemoveCharacter(id);
-    return s;
+  ipcMain.handle("esi:removeCharacter", (_e, id: number) => {
+    return esiRemoveCharacter(id);
   });
 
   ipcMain.handle("universe:resolveSystem", async (_e, name: string) => {
@@ -235,8 +301,7 @@ async function boot(): Promise<void> {
         }
       } else {
         const store = loadEsiStore();
-        const characterId =
-          typeof payload?.characterId === "number" ? payload.characterId : store.activeCharacterId ?? null;
+        const characterId = typeof payload?.characterId === "number" ? payload.characterId : store.activeCharacterId ?? null;
 
         if (!characterId) return { ok: false, error: "No character linked yet" };
 
@@ -283,6 +348,12 @@ async function boot(): Promise<void> {
       let route: string[] | null = null;
       let hopLys: number[] | null = null;
 
+      const cfgPlanner = loadConfig();
+      const gateAvoidLimit = cfgPlanner.planner.maxGateJumpsToCheck;
+
+      let gateAvoidFirstMid: GateAvoidSuggestion | null = null;
+      let gateAvoidMessage: string | null = null;
+
       if (!inRange) {
         const res = await findRouteESI(from.id, to.id, maxLy, 80);
 
@@ -308,6 +379,13 @@ async function boot(): Promise<void> {
           hop.push(calcLightyears(a.x, a.y, a.z, b.x, b.y, b.z));
         }
         hopLys = hop;
+
+        gateAvoidFirstMid = findGateAvoidFirstMid(from.id, to.id, maxLy, gateAvoidLimit);
+        gateAvoidMessage = gateAvoidFirstMid
+          ? null
+          : gateAvoidLimit > 0
+            ? `No gate-to option within ${gateAvoidLimit} jump${gateAvoidLimit === 1 ? "" : "s"}`
+            : "Gate check disabled";
       }
 
       return {
@@ -322,6 +400,9 @@ async function boot(): Promise<void> {
         midpointsNeeded,
         route,
         hopLys,
+        gateAvoidFirstMid,
+        gateAvoidMessage,
+        gateAvoidLimit,
         jdcLevel,
       };
     }

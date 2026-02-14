@@ -8,7 +8,7 @@ contextBridge.exposeInMainWorld("rangefinder", {
 
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
 
-  // ✅ reliable clipboard bridge (fixes Copy summary failing in overlay windows)
+ 
   writeClipboardText: (text: string) => ipcRenderer.invoke("clipboard:writeText", text),
 
   onIntelReset: (cb: () => void) => {

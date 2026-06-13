@@ -1,7 +1,8 @@
-import { app, dialog, shell } from "electron";
+import { app, shell } from "electron";
 import * as https from "https";
 import { loadConfig, saveConfig } from "../storage/appConfig";
 import { isDevMode } from "../shared/env";
+import { showUpdateNoticeWindow } from "../windows/updateNoticeWindow";
 
 type LatestRelease = {
   tag_name?: string;
@@ -97,19 +98,15 @@ function cleanPatchNotesPreview(body: string): string {
 
     s = s.replace(/^[-*]\s+/, "");
     s = s.replace(/^\d+\.\s+/, "");
-
     s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-
     s = s.replace(/`([^`]+)`/g, "$1");
-
     s = s.replace(/\*\*([^*]+)\*\*/g, "$1");
     s = s.replace(/\*([^*]+)\*/g, "$1");
     s = s.replace(/__([^_]+)__/g, "$1");
     s = s.replace(/_([^_]+)_/g, "$1");
-
     s = s.trim();
-    if (!s) continue;
 
+    if (!s) continue;
     if (s.length > 90) s = s.slice(0, 90).trimEnd() + "…";
 
     out.push("• " + s);
@@ -136,29 +133,16 @@ export async function maybeShowUpdatePopup(): Promise<void> {
   const cfg = loadConfig();
   if (cfg.lastUpdatePromptedVersion === latestTag) return;
 
-  const title = "Update available";
   const releaseName = String(latest.name || "").trim();
   const releaseUrl = String(latest.html_url || "").trim();
-
   const preview = cleanPatchNotesPreview(String(latest.body || ""));
-  const notesBlock = preview ? `\n\nWhat’s new:\n${preview}` : "";
 
-  const message =
-    `A newer version of Rangefinder is available.\n\nInstalled: v${localVersion}\nLatest: v${latestTag}` +
-    (releaseName ? `\n\nRelease: ${releaseName}` : "") +
-    notesBlock;
-
-  const buttons = releaseUrl ? ["Download", "Patch notes", "Later"] : ["OK"];
-  const defaultId = 0;
-
-  const res = await dialog.showMessageBox({
-    type: "info",
-    title,
-    message,
-    buttons,
-    defaultId,
-    cancelId: buttons.length - 1,
-    noLink: true,
+  const action = await showUpdateNoticeWindow({
+    localVersion,
+    latestVersion: latestTag,
+    releaseName,
+    patchNotesPreview: preview,
+    hasReleaseUrl: !!releaseUrl,
   });
 
   cfg.lastUpdatePromptedVersion = latestTag;
@@ -166,13 +150,7 @@ export async function maybeShowUpdatePopup(): Promise<void> {
 
   if (!releaseUrl) return;
 
-  if (res.response === 0) {
+  if (action === "download" || action === "patch-notes") {
     await shell.openExternal(releaseUrl);
-    return;
-  }
-
-  if (res.response === 1) {
-    await shell.openExternal(releaseUrl);
-    return;
   }
 }

@@ -6,7 +6,6 @@ export type JumpShipClass =
   | "RORQUAL"
   | "LANCER";
 
-
 export const BASE_JUMP_RANGE_LY: Record<JumpShipClass, number> = {
   BLACK_OPS: 4.0,
   JUMP_FREIGHTER: 5.0,
@@ -18,10 +17,9 @@ export const BASE_JUMP_RANGE_LY: Record<JumpShipClass, number> = {
 
 export function calcJumpRangeLy(baseRangeLy: number, jumpDriveCalibrationLevel: number): number {
   const lvl = clampInt(jumpDriveCalibrationLevel, 0, 5);
-  const mult = 1 + 0.2 * lvl; 
+  const mult = 1 + 0.2 * lvl;
   return baseRangeLy * mult;
 }
-
 
 export function shipClassFromEsiType(input: {
   groupId?: number | null;
@@ -31,7 +29,6 @@ export function shipClassFromEsiType(input: {
   const gid = typeof input.groupId === "number" ? input.groupId : null;
   const gname = String(input.groupName || "").trim().toLowerCase();
   const tname = String(input.typeName || "").trim().toLowerCase();
-
 
   const GROUP_BLACK_OPS = 898;
   const GROUP_JUMP_FREIGHTER = 902;
@@ -48,25 +45,18 @@ export function shipClassFromEsiType(input: {
   if (gid === GROUP_CARRIER || gid === GROUP_DREADNOUGHT || gid === GROUP_FAX) return "CAPITAL";
   if (gid === GROUP_SUPERCARRIER || gid === GROUP_TITAN) return "SUPERCAP";
 
-
   if (gname) {
     if (gname.includes("black ops")) return "BLACK_OPS";
     if (gname.includes("jump freighter")) return "JUMP_FREIGHTER";
     if (gname.includes("capital industrial")) return "RORQUAL";
-
-
     if (gname.includes("lancer")) return "LANCER";
-
-
     if (gname.includes("force auxiliary")) return "CAPITAL";
+    if (gname.includes("command carrier")) return "CAPITAL";
     if (gname.includes("carrier")) return "CAPITAL";
     if (gname.includes("dreadnought")) return "CAPITAL";
-
-
     if (gname.includes("supercarrier")) return "SUPERCAP";
     if (gname.includes("titan")) return "SUPERCAP";
   }
-
 
   const byName = shipClassFromShipName(tname);
   if (byName) return byName;
@@ -74,25 +64,23 @@ export function shipClassFromEsiType(input: {
   return null;
 }
 
-
 export function shipClassFromShipName(shipName: string): JumpShipClass | null {
   const n = String(shipName || "").trim().toLowerCase();
   if (!n) return null;
 
-  // Black Ops
   const blops = new Set(["redeemer", "widow", "sin", "panther", "marshal"]);
   if (blops.has(n)) return "BLACK_OPS";
-
 
   const jfs = new Set(["ark", "rhea", "anshar", "nomad"]);
   if (jfs.has(n)) return "JUMP_FREIGHTER";
 
-
   if (n === "rorqual") return "RORQUAL";
 
-  
   const lancers = new Set(["bane", "karura", "hubris", "valravn"]);
   if (lancers.has(n)) return "LANCER";
+
+  const commandCarriers = new Set(["simurgh", "salvation", "gaia", "ymir"]);
+  if (commandCarriers.has(n)) return "CAPITAL";
 
   return null;
 }

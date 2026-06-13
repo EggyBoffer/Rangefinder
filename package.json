@@ -1,6 +1,6 @@
 {
   "name": "rangefinder",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Rangefinder (EVE Online jump planner)",
   "main": "dist/main/main.js",
   "type": "commonjs",
@@ -38,35 +38,39 @@
     "typescript": "^5.9.3"
   },
   "build": {
-    "appId": "uk.co.rangefinder.app",
-    "productName": "Rangefinder",
-    "directories": {
-      "output": "release",
-      "buildResources": "assets"
-    },
-    "files": [
-      "dist/**/*",
-      "assets/**/*",
-      "package.json"
+  "appId": "uk.co.rangefinder.app",
+  "productName": "Rangefinder",
+  "directories": {
+    "output": "release",
+    "buildResources": "assets"
+  },
+  "files": [
+  "dist/**/*",
+  "assets/**/*",
+  "package.json",
+  "node_modules/**/*"
+  ],
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/**/*.node"
+  ],
+  "win": {
+    "icon": "assets/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
     ],
-    "asar": true,
-    "win": {
-      "icon": "assets/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "Rangefinder-Setup-${version}-win-x64.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+    "artifactName": "Rangefinder-Setup-${version}-win-x64.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
   }
+}
 }

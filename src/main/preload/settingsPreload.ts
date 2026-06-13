@@ -16,4 +16,10 @@ contextBridge.exposeInMainWorld("rangefinder", {
   esiSetActiveCharacterId: (id: number) => ipcRenderer.invoke("esi:setActiveCharacterId", id),
   esiAddCharacter: () => ipcRenderer.invoke("esi:addCharacter"),
   esiRemoveCharacter: (id: number) => ipcRenderer.invoke("esi:removeCharacter", id),
+  esiCheckCharacters: () => ipcRenderer.invoke("esi:checkCharacters"),
+  onEsiCharactersUpdated: (callback: (store: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, store: unknown) => callback(store);
+    ipcRenderer.on("esi:charactersUpdated", listener);
+    return () => ipcRenderer.removeListener("esi:charactersUpdated", listener);
+  },
 });

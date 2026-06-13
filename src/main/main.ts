@@ -1,4 +1,4 @@
-import { app, ipcMain, shell, clipboard } from "electron";
+import { app, ipcMain, shell, clipboard, BrowserWindow } from "electron";
 import { createTray } from "./tray";
 import { getHotkeys, registerHotkeys, resetHotkeysToDefault, setHotkeys, type HotkeyConfig } from "./hotkey";
 import { loadConfig, saveConfig } from "./storage/appConfig";
@@ -10,6 +10,7 @@ import { setDevState, getDevState } from "./storage/devState";
 import { ensureUniverseReady } from "./universe/universeBootstrap";
 import { resolveSystemByName, getSystemById, suggestSystemsByName } from "./universe/universeDb";
 import { calcLightyears } from "./universe/universeMath";
+import { showEsiWarningWindow } from "./windows/esiWarningWindow";
 import {
   BASE_JUMP_RANGE_LY,
   calcJumpRangeLy,
@@ -24,8 +25,14 @@ import {
   loadEsiStore,
   removeCharacter as esiRemoveCharacter,
   setActiveCharacter as esiSetActiveCharacter,
+  type EsiStore,
 } from "./esi/esiStore";
-import { startAddCharacter, fetchEsiCharacterLocationShipAndSkills, fetchEsiCharacterJdcLevel } from "./esi/esiAuth";
+import {
+  startAddCharacter,
+  fetchEsiCharacterLocationShipAndSkills,
+  fetchEsiCharacterJdcLevel,
+  checkAllEsiCharactersAuth,
+} from "./esi/esiAuth";
 import { maybeShowUpdatePopup } from "./updater/updateNotify";
 import { lookupCharacterIntel, getKillmailEnriched } from "./intel/intelService";
 
@@ -131,6 +138,85 @@ if (!gotLock) {
   });
 }
 
+function notifyEsiCharactersUpdated(store: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("esi:charactersUpdated", store);
+    }
+  }
+}
+
+function getEsiIssueCharacters(store: EsiStore) {
+  return store.characters.filter((c) => c.authStatus === "expired" || c.authStatus === "unknown");
+}
+
+function showEsiLaunchIssuePopup(store: EsiStore): void {
+  const issueChars = getEsiIssueCharacters(store);
+
+  if (!issueChars.length) return;
+
+  showEsiWarningWindow(
+    {
+      characters: issueChars,
+    },
+    () => {
+      showSettingsWindow();
+    }
+  );
+}
+
+
+function withDevExpiredEsiCharacter(store: EsiStore): EsiStore {
+  if (!isDevMode()) return store;
+
+  return {
+    ...store,
+    characters: [
+      ...store.characters,
+      {
+        characterId: 900000001,
+        characterName: "Dev - Bad ESI Token",
+        accessToken: "",
+        refreshToken: "",
+        expiresAt: 0,
+        tokenType: "Bearer",
+        scopes: [],
+        updatedAt: Date.now(),
+        authStatus: "expired",
+        authMessage: "Dev test: ESI key expired or revoked.",
+        authCheckedAt: Date.now(),
+      },
+    ],
+  };
+}
+
+function checkEsiCharactersOnLaunch(): void {
+  setTimeout(() => {
+    const existingStore = loadEsiStore();
+
+    if (!existingStore.characters.length && !isDevMode()) return;
+
+    if (!existingStore.characters.length && isDevMode()) {
+      const devStore = withDevExpiredEsiCharacter(existingStore);
+      notifyEsiCharactersUpdated(devStore);
+      showEsiLaunchIssuePopup(devStore);
+      return;
+    }
+
+    checkAllEsiCharactersAuth()
+      .then((store) => {
+        const finalStore = withDevExpiredEsiCharacter(store);
+        notifyEsiCharactersUpdated(finalStore);
+        showEsiLaunchIssuePopup(finalStore);
+      })
+      .catch(() => {
+        const store = withDevExpiredEsiCharacter(loadEsiStore());
+        notifyEsiCharactersUpdated(store);
+        showEsiLaunchIssuePopup(store);
+      });
+  }, 1500);
+}
+
 async function boot(): Promise<void> {
   await ensureUniverseReady();
 
@@ -225,6 +311,12 @@ async function boot(): Promise<void> {
 
   ipcMain.handle("esi:removeCharacter", (_e, id: number) => {
     return esiRemoveCharacter(id);
+  });
+
+  ipcMain.handle("esi:checkCharacters", async () => {
+    const store = await checkAllEsiCharactersAuth();
+    notifyEsiCharactersUpdated(store);
+    return store;
   });
 
   ipcMain.handle("universe:resolveSystem", async (_e, name: string) => {
@@ -426,6 +518,8 @@ async function boot(): Promise<void> {
     cfg.hasLaunchedBefore = true;
     saveConfig(cfg);
   }
+
+  checkEsiCharactersOnLaunch();
 
   setTimeout(() => {
     maybeShowUpdatePopup().catch(() => {});

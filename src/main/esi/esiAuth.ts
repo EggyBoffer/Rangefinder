@@ -3,7 +3,7 @@ import https from "https";
 import crypto from "crypto";
 import { shell } from "electron";
 import { URL } from "url";
-import { addCharacter, loadEsiStore, saveEsiStore, type EsiCharacter } from "./esiStore";
+import { addCharacter, loadEsiStore, saveEsiStore, updateCharacterAuthStatus, type EsiCharacter, type EsiStore } from "./esiStore";
 import { decodeJwtPayload, extractCharacterFromJwt } from "./esiJwt";
 import { getSystemById } from "../universe/universeDb";
 
@@ -148,6 +148,17 @@ function buildAuthUrl(state: string, codeChallenge: string): string {
   return u.toString();
 }
 
+function isExpiredTokenResponse(status: number, json: any, raw: string): boolean {
+  const text = `${String(json?.error || "")} ${String(json?.error_description || "")} ${String(raw || "")}`.toLowerCase();
+  if (status === 401) return true;
+  if (status === 400 && text.includes("invalid_grant")) return true;
+  if (text.includes("invalid_grant")) return true;
+  if (text.includes("invalid refresh")) return true;
+  if (text.includes("revoked")) return true;
+  if (text.includes("refresh token expired")) return true;
+  return false;
+}
+
 export async function startAddCharacter(): Promise<{ ok: boolean; error?: string }> {
   if (activeLogin) return { ok: false, error: "Login already in progress" };
 
@@ -161,6 +172,14 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
   const codeChallenge = sha256Base64url(codeVerifier);
 
   return new Promise((resolve) => {
+    let resolved = false;
+
+    function finish(result: { ok: boolean; error?: string }) {
+      if (resolved) return;
+      resolved = true;
+      resolve(result);
+    }
+
     const server = http.createServer(async (req, res) => {
       try {
         const reqUrl = new URL(req.url || "", `http://${listenHost}:${listenPort}`);
@@ -179,7 +198,7 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end("<h3>Rangefinder</h3><p>Login cancelled.</p><p>You can close this tab.</p>");
           cleanup();
-          resolve({ ok: false, error: "Login cancelled" });
+          finish({ ok: false, error: "Login cancelled" });
           return;
         }
 
@@ -187,7 +206,7 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
           res.writeHead(400, { "Content-Type": "text/html" });
           res.end("<h3>Rangefinder</h3><p>Invalid login response.</p><p>You can close this tab.</p>");
           cleanup();
-          resolve({ ok: false, error: "Invalid callback" });
+          finish({ ok: false, error: "Invalid callback" });
           return;
         }
 
@@ -207,7 +226,7 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end("<h3>Rangefinder</h3><p>Login failed.</p><p>You can close this tab.</p>");
           cleanup();
-          resolve({ ok: false, error: "Token exchange failed" });
+          finish({ ok: false, error: "Token exchange failed" });
           return;
         }
 
@@ -227,13 +246,16 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
           tokenType,
           scopes: tokenScopes,
           updatedAt: now(),
+          authStatus: "valid",
+          authMessage: "ESI key is valid.",
+          authCheckedAt: now(),
         };
 
         if (!char.characterId) {
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end("<h3>Rangefinder</h3><p>Login failed.</p><p>You can close this tab.</p>");
           cleanup();
-          resolve({ ok: false, error: "Could not read character from token" });
+          finish({ ok: false, error: "Could not read character from token" });
           return;
         }
 
@@ -243,15 +265,16 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
         res.end(
           `<h3>Rangefinder</h3><p>Added ${char.characterName || "character"}.</p><p>You can close this tab.</p>`
         );
+
         cleanup();
-        resolve({ ok: true });
+        finish({ ok: true });
       } catch {
         try {
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end("<h3>Rangefinder</h3><p>Login failed.</p><p>You can close this tab.</p>");
         } catch {}
         cleanup();
-        resolve({ ok: false, error: "Login failed" });
+        finish({ ok: false, error: "Login failed" });
       }
     });
 
@@ -275,14 +298,18 @@ export async function startAddCharacter(): Promise<{ ok: boolean; error?: string
 }
 
 async function ensureValidAccessToken(
-  characterId: number
-): Promise<{ ok: boolean; accessToken?: string; error?: string }> {
+  characterId: number,
+  forceRefresh = false
+): Promise<{ ok: boolean; accessToken?: string; error?: string; expired?: boolean }> {
   const store = loadEsiStore();
   const char = store.characters.find((c) => c.characterId === characterId);
   if (!char) return { ok: false, error: "Character not found" };
 
-  const needsRefresh = now() >= (char.expiresAt || 0) - 60000;
-  if (!needsRefresh) return { ok: true, accessToken: char.accessToken };
+  const needsRefresh = forceRefresh || now() >= (char.expiresAt || 0) - 60000;
+  if (!needsRefresh) {
+    updateCharacterAuthStatus(characterId, "valid", "ESI key is valid.");
+    return { ok: true, accessToken: char.accessToken };
+  }
 
   const tokenRes = await postForm(TOKEN_URL, {
     grant_type: "refresh_token",
@@ -295,7 +322,14 @@ async function ensureValidAccessToken(
   const expiresIn = Number(tokenRes.json?.expires_in || 0);
   const tokenType = String(tokenRes.json?.token_type || char.tokenType || "Bearer");
 
-  if (!accessToken || !expiresIn) return { ok: false, error: "Refresh failed" };
+  if (!accessToken || !expiresIn) {
+    const expired = isExpiredTokenResponse(tokenRes.status, tokenRes.json, tokenRes.raw);
+    const message = expired
+      ? "ESI key expired or was revoked. Remove and re-add the character."
+      : "Could not refresh ESI key. Check your connection and try again.";
+    updateCharacterAuthStatus(characterId, expired ? "expired" : "unknown", message);
+    return { ok: false, error: message, expired };
+  }
 
   const jwtPayload = decodeJwtPayload(accessToken) || {};
   const scopeStr = String(jwtPayload.scp || jwtPayload.scope || "");
@@ -318,12 +352,32 @@ async function ensureValidAccessToken(
     tokenType,
     scopes: tokenScopes,
     updatedAt: now(),
+    authStatus: "valid",
+    authMessage: "ESI key is valid.",
+    authCheckedAt: now(),
   };
 
   store.characters = store.characters.map((c) => (c.characterId === characterId ? updated : c));
   saveEsiStore(store);
 
   return { ok: true, accessToken };
+}
+
+export async function checkEsiCharacterAuth(
+  characterId: number
+): Promise<{ ok: boolean; expired?: boolean; error?: string }> {
+  const tok = await ensureValidAccessToken(characterId, true);
+  if (!tok.ok) return { ok: false, expired: tok.expired, error: tok.error || "ESI key check failed" };
+  updateCharacterAuthStatus(characterId, "valid", "ESI key is valid.");
+  return { ok: true };
+}
+
+export async function checkAllEsiCharactersAuth(): Promise<EsiStore> {
+  const store = loadEsiStore();
+  for (const char of store.characters) {
+    await checkEsiCharacterAuth(char.characterId);
+  }
+  return loadEsiStore();
 }
 
 function extractSkillsArray(payload: any): any[] | null {
@@ -343,7 +397,10 @@ async function readSkillsJdcLevel(
 
   if (res.status === 0) return { ok: false, error: "Could not contact ESI (network / timeout)." };
   if (res.status >= 500) return { ok: false, error: "ESI is currently having issues. Try again in a moment." };
-  if (res.status === 401) return { ok: false, error: "ESI token rejected. Remove and re-add the character." };
+  if (res.status === 401) {
+    updateCharacterAuthStatus(characterId, "expired", "ESI key expired or was revoked. Remove and re-add the character.");
+    return { ok: false, error: "ESI key expired or was revoked. Remove and re-add the character." };
+  }
   if (res.status === 403) return { ok: false, error: "Missing skills scope. Remove and re-add the character." };
 
   if (res.json && typeof res.json.error === "string" && res.json.error.trim()) {
@@ -423,7 +480,10 @@ export async function fetchEsiCharacterLocationShipAndSkills(
   const loc = await getJson(`${ESI_BASE}/characters/${characterId}/location/?datasource=tranquility`, authHeader);
   if (loc.status === 0) return { ok: false, error: "Could not contact ESI (location)." };
   if (loc.status >= 500) return { ok: false, error: "ESI is currently having issues. Try again in a moment." };
-  if (loc.status === 401) return { ok: false, error: "ESI token rejected. Remove and re-add the character." };
+  if (loc.status === 401) {
+    updateCharacterAuthStatus(characterId, "expired", "ESI key expired or was revoked. Remove and re-add the character.");
+    return { ok: false, error: "ESI key expired or was revoked. Remove and re-add the character." };
+  }
   if (loc.status === 403) return { ok: false, error: "Missing location scope. Remove and re-add the character." };
 
   const systemId = Number(loc.json?.solar_system_id || 0);
@@ -432,7 +492,10 @@ export async function fetchEsiCharacterLocationShipAndSkills(
   const ship = await getJson(`${ESI_BASE}/characters/${characterId}/ship/?datasource=tranquility`, authHeader);
   if (ship.status === 0) return { ok: false, error: "Could not contact ESI (ship)." };
   if (ship.status >= 500) return { ok: false, error: "ESI is currently having issues. Try again in a moment." };
-  if (ship.status === 401) return { ok: false, error: "ESI token rejected. Remove and re-add the character." };
+  if (ship.status === 401) {
+    updateCharacterAuthStatus(characterId, "expired", "ESI key expired or was revoked. Remove and re-add the character.");
+    return { ok: false, error: "ESI key expired or was revoked. Remove and re-add the character." };
+  }
   if (ship.status === 403) return { ok: false, error: "Missing ship scope. Remove and re-add the character." };
 
   const shipTypeId = Number(ship.json?.ship_type_id || 0);

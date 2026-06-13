@@ -131,16 +131,33 @@
       }
       .charName { font-weight: 700; }
       .charMeta { color: var(--muted); font-size: 12px; margin-top: 2px; }
-      .tagActive {
+      .tagActive,
+      .tagValid,
+      .tagExpired,
+      .tagUnknown {
         display: inline-block;
         margin-left: 8px;
         font-size: 11px;
         padding: 2px 6px;
         border-radius: 999px;
         border: 1px solid var(--border);
+        vertical-align: middle;
+      }
+      .tagActive {
         color: var(--good);
         background: rgba(90, 255, 170, 0.08);
-        vertical-align: middle;
+      }
+      .tagValid {
+        color: var(--good);
+        background: rgba(90, 255, 170, 0.08);
+      }
+      .tagExpired {
+        color: var(--bad);
+        background: rgba(255, 90, 90, 0.08);
+      }
+      .tagUnknown {
+        color: var(--muted);
+        background: rgba(255,255,255,0.04);
       }
 
       @media (max-width: 720px) {
@@ -225,6 +242,7 @@
 
               <div class="actions" style="justify-content:flex-start;">
                 <button class="btn" id="btnAddChar">Add Character</button>
+                <button class="btn" id="btnCheckChars">Check ESI Keys</button>
               </div>
 
               <div class="status" id="esiStatus"></div>
@@ -259,6 +277,7 @@
       const plannerStatus = document.getElementById("plannerStatus");
 
       const btnAddChar = document.getElementById("btnAddChar");
+      const btnCheckChars = document.getElementById("btnCheckChars");
       const esiStatus = document.getElementById("esiStatus");
       const charList = document.getElementById("charList");
 
@@ -418,6 +437,63 @@
         hkIntel.value = hk.intelSearch || "";
       }
 
+      function formatTime(ts) {
+        const n = Number(ts || 0);
+        if (!n) return "never";
+        try {
+          return new Date(n).toLocaleString();
+        } catch {
+          return "unknown";
+        }
+      }
+
+      function authTagForCharacter(c) {
+        const status = String((c && c.authStatus) || "unknown").toLowerCase();
+        const tag = document.createElement("span");
+        if (status === "valid") {
+          tag.className = "tagValid";
+          tag.textContent = "ESI OK";
+          return tag;
+        }
+        if (status === "expired") {
+          tag.className = "tagExpired";
+          tag.textContent = "ESI EXPIRED";
+          return tag;
+        }
+        tag.className = "tagUnknown";
+        tag.textContent = "ESI UNKNOWN";
+        return tag;
+      }
+
+      function expiredCharactersFromStore(store) {
+        const chars = (store && store.characters) || [];
+        return Array.isArray(chars) ? chars.filter((c) => String(c.authStatus || "").toLowerCase() === "expired") : [];
+      }
+
+      function unknownCharactersFromStore(store) {
+        const chars = (store && store.characters) || [];
+        return Array.isArray(chars) ? chars.filter((c) => String(c.authStatus || "").toLowerCase() === "unknown") : [];
+      }
+
+      function updateEsiStatusFromStore(store, successMessage) {
+        const expired = expiredCharactersFromStore(store);
+        const unknown = unknownCharactersFromStore(store);
+
+        if (expired.length) {
+          setStatus(esiStatus, "bad", `${expired.length} ESI key${expired.length === 1 ? " is" : "s are"} expired. Remove and re-add the affected character${expired.length === 1 ? "" : "s"}.`);
+          return;
+        }
+
+        if (unknown.length) {
+          setStatus(esiStatus, "bad", `${unknown.length} ESI key${unknown.length === 1 ? " could" : "s could"} not be checked. Check your connection or try again later.`);
+          return;
+        }
+
+        if (successMessage) {
+          setStatus(esiStatus, "good", successMessage);
+        }
+      }
+
       function renderCharacters(store) {
         charList.innerHTML = "";
         const chars = (store && store.characters) || [];
@@ -447,9 +523,12 @@
             name.appendChild(tag);
           }
 
+          name.appendChild(authTagForCharacter(c));
+
           const meta = document.createElement("div");
           meta.className = "charMeta";
-          meta.textContent = `ID ${c.characterId}`;
+          const msg = String(c.authMessage || "ESI key has not been checked yet.");
+          meta.textContent = `ID ${c.characterId} · ${msg} · Checked ${formatTime(c.authCheckedAt)}`;
 
           left.appendChild(name);
           left.appendChild(meta);
@@ -462,7 +541,7 @@
             setStatus(esiStatus, null, "");
             const updated = await window.rangefinder.esiRemoveCharacter(c.characterId);
             renderCharacters(updated);
-            setStatus(esiStatus, "good", "Character removed.");
+            updateEsiStatusFromStore(updated, "Character removed.");
           });
 
           row.appendChild(left);
@@ -470,6 +549,14 @@
           charList.appendChild(row);
         }
       }
+
+      btnCheckChars.addEventListener("click", async () => {
+        if (!window.rangefinder || typeof window.rangefinder.esiCheckCharacters !== "function") return;
+        setStatus(esiStatus, null, "Checking ESI keys...");
+        const store = await window.rangefinder.esiCheckCharacters();
+        renderCharacters(store);
+        updateEsiStatusFromStore(store, "ESI keys checked.");
+      });
 
       btnAddChar.addEventListener("click", async () => {
         if (!window.rangefinder || typeof window.rangefinder.esiAddCharacter !== "function") return;
@@ -483,13 +570,23 @@
         setStatus(esiStatus, "good", "Character added.");
         const store = await window.rangefinder.esiListCharacters();
         renderCharacters(store);
+        updateEsiStatusFromStore(store, "Character added.");
       });
 
       async function boot() {
         await loadHotkeys();
         await loadPlanner();
+
+        if (window.rangefinder && typeof window.rangefinder.onEsiCharactersUpdated === "function") {
+          window.rangefinder.onEsiCharactersUpdated((store) => {
+            renderCharacters(store);
+            updateEsiStatusFromStore(store, "");
+          });
+        }
+
         const store = await window.rangefinder.esiListCharacters();
         renderCharacters(store);
+        updateEsiStatusFromStore(store, "");
       }
 
       boot();

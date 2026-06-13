@@ -20,6 +20,9 @@ declare global {
           characterName: string;
           expiresAt: number;
           updatedAt: number;
+          authStatus?: "unknown" | "valid" | "expired";
+          authMessage?: string;
+          authCheckedAt?: number;
         }[];
         activeCharacterId: number | null;
       }>;
@@ -29,6 +32,8 @@ declare global {
 
       esiAddCharacter?: () => Promise<{ ok: boolean; error?: string; store?: any }>;
       esiRemoveCharacter?: (id: number) => Promise<any>;
+      esiCheckCharacters?: () => Promise<any>;
+      onEsiCharactersUpdated?: (callback: (store: unknown) => void) => () => void;
     };
   }
 }

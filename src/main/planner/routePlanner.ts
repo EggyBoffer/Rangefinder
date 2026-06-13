@@ -62,13 +62,13 @@ function isForbiddenRegion(regionName: string | null): boolean {
   return FORBIDDEN_REGIONS.has(n);
 }
 
-function secToOneDecimalRound(sec: number): number {
-  return Math.round(sec * 10) / 10;
+function secToOneDecimalTrunc(sec: number): number {
+  return Math.floor(sec * 10) / 10;
 }
 
 function isCynoAllowed(sec: number | null): boolean {
   if (typeof sec !== "number" || !Number.isFinite(sec)) return false;
-  return secToOneDecimalRound(sec) <= 0.4;
+  return secToOneDecimalTrunc(sec) <= 0.4;
 }
 
 async function fetchSecWithRetry(id: number): Promise<number | null> {
